@@ -1,0 +1,202 @@
+import { NextResponse } from 'next/server'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '../auth/[...nextauth]/route'
+import dbConnect from '@/lib/mongodb'
+import ProjectGroup from '@/models/ProjectGroup'
+import User from '@/models/User'
+
+// Create a project group (student leader submits on behalf of the team)
+export async function POST(request) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    await dbConnect()
+
+    const body = await request.json()
+    const { title, description, domain, department, semester, members = [], memberEmails = [] } = body
+
+    if (!title || !department || !semester) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    // Build members from ids or emails (optional at creation)
+    const memberIds = [...new Set([
+      ...members.map(m => String(m.student || m)),
+      ...(await (async () => {
+        if (!memberEmails || memberEmails.length === 0) return []
+        const users = await User.find({ email: { $in: memberEmails.map(e => e.toLowerCase()) }, role: 'student' }).select('_id department')
+        return users.map(u => String(u._id))
+      })())
+    ])]
+
+    // Validate all member ids
+    const memberUsers = await User.find({ _id: { $in: memberIds } , role: 'student' })
+    if (memberUsers.length !== memberIds.length) {
+      return NextResponse.json({ error: 'Invalid members list' }, { status: 400 })
+    }
+    // Ensure department consistency
+    if (department) {
+      const diffDept = memberUsers.find(u => u.department !== department)
+      if (diffDept) return NextResponse.json({ error: 'All members must be from the same department' }, { status: 400 })
+    }
+
+    const leaderId = session.user.id
+    const isLeaderIncluded = memberIds.some(id => String(id) === String(leaderId))
+    const finalMembers = [ ...new Set([...memberIds, leaderId]) ].map(id => ({ student: id, role: String(id) === String(leaderId) ? 'leader' : 'member' }))
+
+    const project = new ProjectGroup({
+      title,
+      description,
+      domain,
+      department,
+      semester,
+      members: finalMembers,
+      leader: leaderId,
+      createdBy: leaderId,
+      status: 'submitted'
+    })
+
+    await project.save()
+
+    try {
+      if (global.io) {
+        finalMembers.forEach(m => {
+          global.io.to(`user-${m.student}`).emit('project:new', { projectId: project._id, groupId: project.groupId })
+        })
+      }
+    } catch {}
+
+    return NextResponse.json({ success: true, project })
+  } catch (error) {
+    console.error('Project create error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+// List project groups for role
+export async function GET(request) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    await dbConnect()
+
+    const { searchParams } = new URL(request.url)
+    const qDept = searchParams.get('department')
+    const qYear = searchParams.get('year')
+    const role = session.user.role
+    let filter = {}
+
+    if (role === 'student') {
+      filter = { 'members.student': session.user.id }
+    } else if (role === 'faculty') {
+      // faculty sees projects they guide or belong to their department
+      filter = { $or: [ { internalGuide: session.user.id }, { department: session.user.department } ] }
+    } else if (role === 'hod') {
+      filter = { department: session.user.department }
+    } else if (role === 'admin') {
+      // admin optional filters
+      if (qDept) filter.department = qDept.toUpperCase()
+    }
+
+    // Year filter based on members' admissionYear (only for admin / hod)
+    if (qYear && (role === 'admin' || role === 'hod')) {
+      const yearUsers = await User.find({ admissionYear: Number(qYear) }).select('_id')
+      const yearIds = yearUsers.map(u => u._id)
+      filter.$and = [ { ...(filter.department ? { department: filter.department } : {}) }, { 'members.student': { $in: yearIds } } ]
+      // Remove direct department key if moved into $and
+      delete filter.department
+    }
+
+    const projects = await ProjectGroup.find(filter)
+      .populate('leader', 'academicInfo.name email department admissionYear')
+      .populate('members.student', 'academicInfo.name email department admissionYear')
+      .populate('internalGuide', 'academicInfo.name email')
+      .sort({ createdAt: -1 })
+
+    return NextResponse.json({ projects })
+  } catch (error) {
+    console.error('Project list error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
+// HOD actions: approve/reject, assign guides
+export async function PATCH(request) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    await dbConnect()
+    const body = await request.json()
+    const { projectId, approve, internalGuideId, externalGuide, addMember, removeMember } = body
+    const project = await ProjectGroup.findById(projectId)
+    if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    // Add member (student can add to own project; hod/admin can add; leader only)
+    if (addMember) {
+      if (session.user.role === 'student' && String(project.leader) !== String(session.user.id)) {
+        return NextResponse.json({ error: 'Only leader can add members' }, { status: 403 })
+      }
+      if (!['admin','hod','student'].includes(session.user.role)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+      const isObjectId = /^[0-9a-fA-F]{24}$/.test(addMember)
+      const lookup = isObjectId ? { _id: addMember } : { email: addMember.toLowerCase() }
+      const user = await User.findOne(lookup)
+      if (!user || user.role !== 'student') return NextResponse.json({ error: 'Student not found' }, { status: 400 })
+      if (user.department !== project.department) return NextResponse.json({ error: 'Department mismatch' }, { status: 400 })
+      const already = project.members.find(m => String(m.student) === String(user._id))
+      if (already) return NextResponse.json({ error: 'Already a member' }, { status: 400 })
+      project.members.push({ student: user._id, role: 'member' })
+      await project.save()
+      try { if (global.io) global.io.to(`user-${user._id}`).emit('project:added', { projectId: project._id, groupId: project.groupId }) } catch {}
+      return NextResponse.json({ success: true, project })
+    }
+
+    if (removeMember) {
+      // Leader / admin / hod can remove
+      if (!['admin','hod','student'].includes(session.user.role)) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      }
+      if (session.user.role === 'student' && String(project.leader) !== String(session.user.id)) {
+        return NextResponse.json({ error: 'Only leader can remove members' }, { status: 403 })
+      }
+      const memberDocLookup = /^[0-9a-fA-F]{24}$/.test(removeMember) ? { _id: removeMember } : { email: removeMember.toLowerCase() }
+      const memberDoc = await User.findOne(memberDocLookup)
+      if (!memberDoc) return NextResponse.json({ error: 'Member not found' }, { status: 400 })
+      if (String(memberDoc._id) === String(project.leader)) return NextResponse.json({ error: 'Cannot remove leader' }, { status: 400 })
+      const before = project.members.length
+      project.members = project.members.filter(m => String(m.student) !== String(memberDoc._id))
+      if (project.members.length === before) return NextResponse.json({ error: 'Not a member' }, { status: 400 })
+      await project.save()
+      return NextResponse.json({ success: true, project })
+    }
+
+    if (session.user.role !== 'hod' && session.user.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    if (typeof approve === 'boolean') {
+      project.status = approve ? 'approved' : 'rejected'
+    }
+    if (internalGuideId) {
+      const faculty = await User.findById(internalGuideId)
+      if (!faculty || !['faculty', 'hod'].includes(faculty.role)) {
+        return NextResponse.json({ error: 'Invalid internal guide' }, { status: 400 })
+      }
+      project.internalGuide = faculty._id
+    }
+    if (externalGuide) {
+      project.externalGuide = externalGuide
+    }
+
+    await project.save()
+
+    return NextResponse.json({ success: true, project })
+  } catch (error) {
+    console.error('Project update error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}
+
