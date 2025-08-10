@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 
 const PUBLIC_PATHS = ['/', '/register', '/api/auth', '/favicon.ico']
 
-export async function middleware(req: Request) {
+export async function middleware(req: NextRequest) {
   const url = new URL(req.url)
   const { pathname } = url
 
@@ -20,11 +20,17 @@ export async function middleware(req: Request) {
   }
 
   const isOnboarded = token.isOnboarded
+  // Cookie-based fast path (covers immediate post-onboarding before JWT refresh)
+  let cookieOnboardedMatches = false
+  try {
+    const c = req.cookies.get('onboarded')?.value
+    if (c && token?.sub && c === token.sub) cookieOnboardedMatches = true
+  } catch {}
   const isOnboardingRoute = pathname.startsWith('/onboarding')
 
   // If not onboarded, force /onboarding (allow its APIs)
-  if (!isOnboarded) {
-    if (!isOnboardingRoute && !pathname.startsWith('/api/onboarding')) {
+  if (!isOnboarded && !cookieOnboardedMatches) {
+    if (!isOnboardingRoute && !pathname.startsWith('/api/onboarding') && !pathname.startsWith('/api/user/onboarding')) {
       return NextResponse.redirect(new URL('/onboarding', req.url))
     }
   } else {

@@ -23,12 +23,13 @@ export default function LoginForm() {
     // Keep if user already typed something
   }
 
-  const validateEmail = (email) => /^[^@\s]+@charusat\.edu\.in$/i.test(email)
+  // Accept both student and staff domains
+  const validateEmail = (email) => /^[^@\s]+@charusat\.(edu|ac)\.in$/i.test(email)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!validateEmail(email)) {
-      toast.error('Please use your Charusat email address ending with @charusat.edu.in')
+      toast.error('Use your Charusat email (@charusat.edu.in for students, @charusat.ac.in for faculty/HOD)')
       return
     }
     setIsLoading(true)
@@ -45,7 +46,7 @@ export default function LoginForm() {
             const s = await res.json()
             const u = s?.user
             if (u) {
-              if ((u.role === 'student') && !u.isOnboarded) {
+              if (!u.isOnboarded) {
                 window.location.href = '/onboarding'
               } else if (u.role === 'admin') {
                 window.location.href = '/dashboard/admin'

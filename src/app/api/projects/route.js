@@ -5,6 +5,11 @@ import dbConnect from '@/lib/mongodb'
 import ProjectGroup from '@/models/ProjectGroup'
 import User from '@/models/User'
 
+// Simple in-memory notifications (replace with persistent store later)
+if (!global.projectNotifications) {
+  global.projectNotifications = []
+}
+
 // Create a project group (student leader submits on behalf of the team)
 export async function POST(request) {
   try {
@@ -30,16 +35,12 @@ export async function POST(request) {
       })())
     ])]
 
-    // Validate all member ids
-    const memberUsers = await User.find({ _id: { $in: memberIds } , role: 'student' })
+  // Validate all member ids (allow cross-department)
+  const memberUsers = await User.find({ _id: { $in: memberIds }, role: 'student' })
     if (memberUsers.length !== memberIds.length) {
       return NextResponse.json({ error: 'Invalid members list' }, { status: 400 })
     }
-    // Ensure department consistency
-    if (department) {
-      const diffDept = memberUsers.find(u => u.department !== department)
-      if (diffDept) return NextResponse.json({ error: 'All members must be from the same department' }, { status: 400 })
-    }
+  // Removed department uniformity requirement (cross-department collaboration allowed)
 
     const leaderId = session.user.id
     const isLeaderIncluded = memberIds.some(id => String(id) === String(leaderId))
@@ -90,10 +91,12 @@ export async function GET(request) {
     if (role === 'student') {
       filter = { 'members.student': session.user.id }
     } else if (role === 'faculty') {
-      // faculty sees projects they guide or belong to their department
-      filter = { $or: [ { internalGuide: session.user.id }, { department: session.user.department } ] }
+      // Faculty should only see groups explicitly assigned to them as internal guide
+      filter = { internalGuide: session.user.id }
     } else if (role === 'hod') {
-      filter = { department: session.user.department }
+      // HOD sees groups whose LEADER is from their department
+      const leaderIds = await User.find({ role: 'student', department: session.user.department }).distinct('_id')
+      filter = { leader: { $in: leaderIds } }
     } else if (role === 'admin') {
       // admin optional filters
       if (qDept) filter.department = qDept.toUpperCase()
@@ -186,6 +189,17 @@ export async function PATCH(request) {
         return NextResponse.json({ error: 'Invalid internal guide' }, { status: 400 })
       }
       project.internalGuide = faculty._id
+      try {
+        global.projectNotifications.unshift({
+          type: 'guide-assigned',
+            projectId: project._id.toString(),
+            groupId: project.groupId,
+            title: 'Internal Guide Assigned',
+            message: `Guide ${faculty.academicInfo?.name || faculty.email} assigned to group ${project.groupId}`,
+            ts: Date.now()
+        })
+        global.projectNotifications = global.projectNotifications.slice(0, 200)
+      } catch {}
     }
     if (externalGuide) {
       project.externalGuide = externalGuide

@@ -38,6 +38,7 @@ export default function OnboardingPage() {
     specialization: '',
     education: ''
   })
+  const role = session?.user?.role
 
   const departments = [
     { code: 'CSE', name: 'Computer Science Engineering' },
@@ -64,11 +65,18 @@ export default function OnboardingPage() {
       return
     }
 
-    // If user already onboarded, redirect to dashboard
-    if (session.user.isOnboarded && session.user.academicInfo?.name) {
+  // Only redirect if user is flagged onboarded (avoid premature redirect for faculty/HOD before completing form)
+  if (session.user.isOnboarded) {
       router.push('/dashboard')
     }
   }, [session, status, router])
+
+  // Prefill department for HOD if provided in token (cannot change)
+  useEffect(() => {
+    if (role === 'hod' && session?.user?.department && !formData.department) {
+      setFormData(prev => ({ ...prev, department: session.user.department }))
+    }
+  }, [role, session, formData.department])
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -108,8 +116,9 @@ export default function OnboardingPage() {
           router.push('/dashboard')
         }
       } else {
-        const error = await response.json()
-        toast.error(error.message || 'Failed to update profile')
+  let error
+  try { error = await response.json() } catch {}
+  toast.error(error?.error || error?.message || 'Failed to update profile')
       }
     } catch (error) {
       toast.error('An error occurred while updating profile')
@@ -205,7 +214,7 @@ export default function OnboardingPage() {
             </motion.p>
           </div>
 
-          {/* Progress Bar */}
+      {/* Progress Bar */}
           <motion.div 
             className="mb-8"
             initial={{ opacity: 0, y: 20 }}
@@ -214,7 +223,7 @@ export default function OnboardingPage() {
           >
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Step {step} of 3
+        Step {step} of 3
               </span>
               <span className="text-sm text-gray-500 dark:text-gray-400">
                 {Math.round((step / 3) * 100)}% Complete
@@ -321,86 +330,130 @@ export default function OnboardingPage() {
                     <GraduationCap className="h-4 w-4 text-white" />
                   </motion.div>
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    Academic Information
+                    {role === 'student' ? 'Academic Information' : 'Professional Information'}
                   </h2>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Department *
-                    </label>
-                    <select
-                      value={formData.department}
-                      onChange={(e) => handleInputChange('department', e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
-                    >
-                      <option value="">Select Department</option>
-                      {departments.map((dept) => (
-                        <option key={dept.code} value={dept.code}>
-                          {dept.code} - {dept.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Admission Year *
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.admissionYear}
-                      onChange={(e) => handleInputChange('admissionYear', parseInt(e.target.value))}
-                      min={2020}
-                      max={new Date().getFullYear()}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Current Semester *
-                    </label>
-                    <input
-                      type="number"
-                      value={formData.semester}
-                      onChange={(e) => handleInputChange('semester', parseInt(e.target.value))}
-                      min={1}
-                      max={8}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Section *
-                    </label>
-                    <select
-                      value={formData.section}
-                      onChange={(e) => handleInputChange('section', e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
-                    >
-                      {sections.map((section) => (
-                        <option key={section} value={section}>
-                          Section {section}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      Roll Number *
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.rollNumber}
-                      onChange={(e) => handleInputChange('rollNumber', e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
-                      placeholder="Enter your roll number"
-                    />
-                  </div>
+                  {role === 'student' ? (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Department *
+                        </label>
+                        <select
+                          value={formData.department}
+                          onChange={(e) => handleInputChange('department', e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
+                        >
+                          <option value="">Select Department</option>
+                          {departments.map((dept) => (
+                            <option key={dept.code} value={dept.code}>
+                              {dept.code} - {dept.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Admission Year *
+                        </label>
+                        <input
+                          type="number"
+                          value={formData.admissionYear}
+                          onChange={(e) => handleInputChange('admissionYear', parseInt(e.target.value))}
+                          min={2020}
+                          max={new Date().getFullYear()}
+                          className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Current Semester *
+                        </label>
+                        <input
+                          type="number"
+                          value={formData.semester}
+                          onChange={(e) => handleInputChange('semester', parseInt(e.target.value))}
+                          min={1}
+                          max={8}
+                          className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Section *
+                        </label>
+                        <select
+                          value={formData.section}
+                          onChange={(e) => handleInputChange('section', e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
+                        >
+                          {sections.map((section) => (
+                            <option key={section} value={section}>
+                              Section {section}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Roll Number *
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.rollNumber}
+                          onChange={(e) => handleInputChange('rollNumber', e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
+                          placeholder="Enter your roll number"
+                        />
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Department *
+                        </label>
+                        <select
+                          value={formData.department}
+                          onChange={(e) => handleInputChange('department', e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
+                        >
+                          <option value="">Select Department</option>
+                          {departments.map((dept) => (
+                            <option key={dept.code} value={dept.code}>
+                              {dept.code} - {dept.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Specialization *
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.specialization}
+                          onChange={(e) => handleInputChange('specialization', e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
+                          placeholder="e.g. AI/ML, Structural Engineering"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          Education / Highest Qualification *
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.education}
+                          onChange={(e) => handleInputChange('education', e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
+                          placeholder="e.g. PhD in Computer Science"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -423,7 +476,7 @@ export default function OnboardingPage() {
                     <Award className="h-4 w-4 text-white" />
                   </motion.div>
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    Interests & Preferences
+                    {role === 'student' ? 'Interests & Preferences' : 'Interests & Professional Summary'}
                   </h2>
                 </div>
 
@@ -453,14 +506,14 @@ export default function OnboardingPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Additional Information
+                    {role === 'student' ? 'Additional Information' : 'Professional Summary'}
                   </label>
                   <textarea
                     value={formData.experience}
                     onChange={(e) => handleInputChange('experience', e.target.value)}
                     rows={4}
                     className="w-full px-4 py-3 rounded-xl border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 backdrop-blur-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
-                    placeholder="Tell us about your experience, goals, or any additional information..."
+                    placeholder={role === 'student' ? 'Tell us about your goals or any additional information...' : 'Briefly describe your teaching/research experience, achievements, etc.'}
                   />
                 </div>
               </div>

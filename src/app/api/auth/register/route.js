@@ -31,8 +31,9 @@ export async function POST(request) {
       domainValid = /@charusat\.ac\.in$/i.test(email)
     }
     if (!domainValid) {
+      const expected = role === 'student' ? '@charusat.edu.in' : '@charusat.ac.in'
       return NextResponse.json(
-        { error: `Invalid email domain for role ${role}` },
+        { error: `Invalid email domain for role ${role}. Expected domain: ${expected}` },
         { status: 400 }
       )
     }

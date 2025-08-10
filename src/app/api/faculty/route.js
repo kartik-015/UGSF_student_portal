@@ -18,8 +18,9 @@ export async function GET(request) {
     const department = searchParams.get('department') || (session.user.role === 'hod' ? session.user.department : null)
     const search = searchParams.get('search')
 
-    const query = { role: 'faculty', isActive: true }
-    if (department) query.department = department
+  // Include all academic staff (faculty + hod) for selection
+  const query = { role: { $in: ['faculty','hod'] }, isActive: true }
+  if (department) query.department = department
     if (search) {
       query.$or = [
         { email: { $regex: search, $options: 'i' } },
@@ -27,7 +28,9 @@ export async function GET(request) {
       ]
     }
 
-    const faculty = await User.find(query).select('-password').sort({ 'academicInfo.name': 1 })
+    const faculty = await User.find(query)
+      .select('email academicInfo.name department role specialization education isApproved')
+      .sort({ 'academicInfo.name': 1, email: 1 })
     return NextResponse.json({ faculty })
   } catch (error) {
     console.error('Faculty GET error:', error)

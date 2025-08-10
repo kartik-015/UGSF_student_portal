@@ -25,6 +25,7 @@ import toast from 'react-hot-toast'
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
   { name: 'Students', href: '/dashboard/students', icon: Users, roles: ['admin', 'hod'] },
+  { name: 'Faculty', href: '/dashboard/faculty', icon: User, roles: ['admin','hod'] },
   { name: 'Subjects', href: '/dashboard/subjects', icon: BookOpen, roles: ['admin', 'faculty', 'hod'] },
   { name: 'Assignments', href: '/dashboard/assignments', icon: Calendar, roles: ['admin', 'faculty', 'student', 'hod'] },
   { name: 'Grades', href: '/dashboard/grades', icon: BarChart3, roles: ['admin', 'faculty', 'student', 'hod'] },
@@ -49,8 +50,17 @@ export default function DashboardLayout({ children }) {
       return
     }
 
-    // Check if user needs onboarding (students)
-    const needsOnboarding = (session.user.role === 'student') && (!session.user.isOnboarded)
+    // Check if user needs onboarding (any role) but honor temporary cookie set immediately after completion
+    let cookieOnboarded = false
+    try {
+      const cookieStr = document.cookie || ''
+      const match = cookieStr.split(';').map(s=>s.trim()).find(s=>s.startsWith('onboarded='))
+      if (match) {
+        const val = decodeURIComponent(match.split('=')[1])
+        if (val && session.user.id && val === session.user.id) cookieOnboarded = true
+      }
+    } catch {}
+    const needsOnboarding = !(session.user.isOnboarded || cookieOnboarded)
     if (needsOnboarding && pathname !== '/onboarding') {
       router.push('/onboarding')
       return
@@ -65,9 +75,28 @@ export default function DashboardLayout({ children }) {
     }
   }, [session, status, router, pathname])
 
+  // Poll notifications for admin/hod
+  useEffect(() => {
+    let timer
+    const fetchNotifications = async () => {
+      if (!session || !['admin','hod'].includes(session.user.role)) return
+      try {
+        const res = await fetch('/api/notifications')
+        if (res.ok) {
+          const data = await res.json()
+            setNotifications(data.notifications || [])
+        }
+      } catch {}
+      timer = setTimeout(fetchNotifications, 15000)
+    }
+    fetchNotifications()
+    return () => { if (timer) clearTimeout(timer) }
+  }, [session])
+
   const handleSignOut = async () => {
     try {
       await signOut({ redirect: false })
+  try { document.cookie = 'onboarded=; Max-Age=0; path=/' } catch {}
       router.push('/')
       toast.success('Signed out successfully')
     } catch (error) {

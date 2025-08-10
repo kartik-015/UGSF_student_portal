@@ -53,11 +53,19 @@ export default function RegisterPage() {
       return false
     }
 
-    // Validate email format for students
-    const emailRegex = /^[^@\s]+@charusat\.edu\.in$/i
-    if (!emailRegex.test(formData.email)) {
-      toast.error('Email must end with @charusat.edu.in')
-      return false
+    // Role-specific email domain validation
+    const studentRegex = /^[^@\s]+@charusat\.edu\.in$/i
+    const staffRegex = /^[^@\s]+@charusat\.ac\.in$/i
+    if (formData.role === 'student') {
+      if (!studentRegex.test(formData.email)) {
+        toast.error('Student email must end with @charusat.edu.in')
+        return false
+      }
+    } else { // faculty or hod
+      if (!staffRegex.test(formData.email)) {
+        toast.error('Faculty/HOD email must end with @charusat.ac.in')
+        return false
+      }
     }
 
     return true
@@ -225,13 +233,17 @@ export default function RegisterPage() {
                     value={formData.email}
                     onChange={(e) => handleInputChange('email', e.target.value)}
                     className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-600 bg-gray-900 text-gray-100 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-300"
-                    placeholder={formData.role === 'student' ? '23DIT015@charusat.edu.in' : 'user@charusat.edu.in'}
+                    placeholder={formData.role === 'student' ? '23DIT015@charusat.edu.in' : 'user@charusat.ac.in'}
                     autoComplete="one-time-code"
                   />
                 </div>
-                {formData.role === 'student' && (
+                {formData.role === 'student' ? (
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Use your Charusat student email (format: 23DIT015@charusat.edu.in)
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Use your official faculty/HOD email (must end with @charusat.ac.in)
                   </p>
                 )}
               </div>

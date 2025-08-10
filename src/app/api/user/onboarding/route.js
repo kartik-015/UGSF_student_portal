@@ -30,14 +30,22 @@ export async function POST(request) {
       education
     } = body
 
-    // Validate required fields
-    const isStudent = session.user.role === 'student'
-    const isStaff = ['faculty', 'hod', 'counselor'].includes(session.user.role)
-    if (!name || !phoneNumber || !address || !department || (isStudent && !rollNumber)) {
-      return NextResponse.json(
-        { error: 'Missing required fields' }, 
-        { status: 400 }
-      )
+    // Role-based validation
+    const role = session.user.role
+    const isStudent = role === 'student'
+    const isStaff = ['faculty', 'hod', 'counselor'].includes(role)
+    const missingCommon = !name || !phoneNumber || !address || !department
+    if (missingCommon) {
+      return NextResponse.json({ error: 'Name, phone number, address and department are required' }, { status: 400 })
+    }
+    if (isStudent) {
+      if (!rollNumber || !admissionYear || !semester || !section) {
+        return NextResponse.json({ error: 'Student academic fields are required' }, { status: 400 })
+      }
+    } else if (isStaff) {
+      if (!specialization || !education) {
+        return NextResponse.json({ error: 'Specialization and education are required for staff' }, { status: 400 })
+      }
     }
 
     // Update user with academic info
@@ -53,7 +61,7 @@ export async function POST(request) {
           rollNumber: isStudent ? rollNumber : undefined
         },
         department,
-        admissionYear: isStudent ? admissionYear : new Date().getFullYear(),
+  admissionYear: isStudent ? admissionYear : undefined,
         domain: domain || undefined,
         specialization: specialization || undefined,
         education: education || undefined,
@@ -71,7 +79,7 @@ export async function POST(request) {
       )
     }
 
-    return NextResponse.json({ 
+    const res = NextResponse.json({ 
       success: true,
       message: 'Profile updated successfully',
       user: {
@@ -85,6 +93,11 @@ export async function POST(request) {
         experience: updatedUser.experience
       }
     })
+    // Set onboarding completion cookie (value = user id) so middleware can allow immediate redirect before JWT refresh
+    try {
+      res.cookies.set('onboarded', updatedUser._id.toString(), { path: '/', maxAge: 60 * 60 * 24 * 30 })
+    } catch {}
+    return res
 
   } catch (error) {
     console.error('Error updating user profile:', error)

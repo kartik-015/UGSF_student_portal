@@ -22,17 +22,20 @@ export default function ProjectsPage() {
   const externalGuideOptions = [
     { name: 'Dr. Alice Smith', organization: 'TechLabs', email: 'alice@techlabs.com' },
     { name: 'Mr. Bob Kumar', organization: 'InnoSoft', email: 'bob@innosoft.io' },
-    { name: 'Ms. Chen Li', organization: 'DataEdge', email: 'chen@datatedge.ai' }
+    { name: 'Ms. Chen Li', organization: 'DataEdge', email: 'chen@datatedge.ai' },
+    { name: 'Prof. David Rao', organization: 'OpenAI Research', email: 'david@openai.example' }
   ]
   const isStudent = session?.user?.role === 'student'
   const isHod = session?.user?.role === 'hod'
+  const isAdmin = session?.user?.role === 'admin'
+  const isFaculty = session?.user?.role === 'faculty'
 
   const load = async () => {
     const res = await fetch('/api/projects')
     const data = await res.json()
     setProjects(data.projects || [])
     if (session?.user?.role === 'student') {
-      setMyProjects((data.projects || []).filter(p => p.members.some(m=>m.student?._id===session.user.id)))
+      setMyProjects((data.projects || []).filter(p => String(p.leader?._id) === session.user.id))
     }
     setLoading(false)
   }
@@ -196,6 +199,7 @@ export default function ProjectsPage() {
                       <span className={`text-[10px] px-1.5 py-0.5 rounded ${m.role==='leader'?'bg-blue-600 text-white':'bg-gray-200 dark:bg-gray-700 dark:text-gray-300'}`}>{m.role}</span>
                     </div>
                     <span className="text-[10px] text-gray-500 dark:text-gray-400">{m.student?.email}</span>
+                    {(isAdmin || isHod) && <span className="text-[10px] text-gray-400">Dept: {m.student?.department || '—'}</span>}
                     {isStudent && selectedProject.leader?._id===session?.user?.id && m.role!=='leader' && (
                       <button onClick={()=>{ if(confirm('Remove member?')) removeMember(selectedProject._id, m.student?._id) }} className="mt-1 text-[10px] text-red-600 hover:text-red-700 self-start">Remove</button>
                     )}
@@ -203,6 +207,18 @@ export default function ProjectsPage() {
                 ))}
               </div>
             </div>
+            {(isAdmin || isHod || (isFaculty && selectedProject.internalGuide?._id===session?.user?.id)) && (
+              <div className="pt-2 border-t space-y-2 text-xs text-gray-600 dark:text-gray-300">
+                <h4 className="text-sm font-medium uppercase tracking-wide text-gray-600 dark:text-gray-400">Project Details</h4>
+                <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1">
+                  <div><span className="font-medium">Group ID:</span> {selectedProject.groupId}</div>
+                  <div><span className="font-medium">Status:</span> {selectedProject.status}</div>
+                  <div><span className="font-medium">Internal Guide:</span> {selectedProject.internalGuide?.academicInfo?.name || selectedProject.internalGuide?.email || '—'}</div>
+                  <div><span className="font-medium">External Guide:</span> {selectedProject.externalGuide?.name || '—'}</div>
+                  <div className="sm:col-span-2"><span className="font-medium">Domain:</span> {selectedProject.domain || '—'}</div>
+                </div>
+              </div>
+            )}
             {isStudent && selectedProject.leader?._id===session?.user?.id && (
               <div className="pt-2 border-t">
                 <h4 className="text-sm font-medium mb-2 uppercase tracking-wide text-gray-600 dark:text-gray-400">Manage Members</h4>
@@ -214,16 +230,29 @@ export default function ProjectsPage() {
             )}
             {isHod && (
               <div className="pt-2 border-t space-y-3">
-                <h4 className="text-sm font-medium mb-1 uppercase tracking-wide text-gray-600 dark:text-gray-400">Assign Guides (HOD)</h4>
-                <div className="flex flex-wrap gap-2">
-                  <select className="px-2 py-2 border rounded text-xs" defaultValue="" onChange={e=> assignInternalGuide(selectedProject._id, e.target.value || undefined)}>
-                    <option value="">Internal Guide</option>
-                    {faculty.filter(f=> f.department===selectedProject.department).map(f=> <option key={f._id} value={f._id}>{f.academicInfo?.name || f.email}</option>)}
-                  </select>
-                  <select className="px-2 py-2 border rounded text-xs" defaultValue="" onChange={e=> assignInternalGuide(selectedProject._id, undefined, externalGuideOptions.find(g=>g.email===e.target.value))}>
-                    <option value="">External Guide</option>
-                    {externalGuideOptions.map(g=> <option key={g.email} value={g.email}>{g.name}</option>)}
-                  </select>
+                <h4 className="text-sm font-medium mb-1 uppercase tracking-wide text-gray-600 dark:text-gray-400 flex items-center gap-2">Assign Guides (HOD)
+                  {selectedProject.internalGuide && <span className="text-[10px] font-normal px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-700 text-indigo-700 dark:text-indigo-100">Assigned</span>}
+                </h4>
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <select className="px-2 py-2 border rounded text-xs min-w-[180px] bg-white text-gray-900 dark:bg-white dark:text-gray-900" value={selectedProject.internalGuide?._id || ''} onChange={e=> assignInternalGuide(selectedProject._id, e.target.value || undefined)}>
+                      <option className="text-gray-900" value="">Select Internal Guide</option>
+                      {faculty.filter(f=> f.department===selectedProject.department).map(f => (
+                        <option className="text-gray-900" key={f._id} value={f._id}>
+                          {(f.academicInfo?.name || f.email)} {f.role==='hod'?"(HOD)":''} {f.specialization?`- ${f.specialization}`:''}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedProject.internalGuide && (
+                      <span className="text-[11px] text-gray-500 dark:text-gray-400">Current: {selectedProject.internalGuide?.academicInfo?.name || selectedProject.internalGuide?.email}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <select className="px-2 py-2 border rounded text-xs min-w-[180px] bg-white text-gray-900 dark:bg-white dark:text-gray-900" defaultValue="" onChange={e=> assignInternalGuide(selectedProject._id, undefined, externalGuideOptions.find(g=>g.email===e.target.value))}>
+                      <option className="text-gray-900" value="">Select External Guide</option>
+                      {externalGuideOptions.map(g=> <option className="text-gray-900" key={g.email} value={g.email}>{g.name} - {g.organization}</option>)}
+                    </select>
+                  </div>
                 </div>
               </div>
             )}
