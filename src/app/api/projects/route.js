@@ -14,7 +14,7 @@ if (!global.projectNotifications) {
 export async function POST(request) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!session) return NextResponse.json({ ok: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 })
 
     await dbConnect()
 
@@ -22,7 +22,7 @@ export async function POST(request) {
     const { title, description, domain, department, semester, members = [], memberEmails = [] } = body
 
     if (!title || !department || !semester) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+  return NextResponse.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing required fields' } }, { status: 400 })
     }
 
     // Build members from ids or emails (optional at creation)
@@ -38,7 +38,7 @@ export async function POST(request) {
   // Validate all member ids (allow cross-department)
   const memberUsers = await User.find({ _id: { $in: memberIds }, role: 'student' })
     if (memberUsers.length !== memberIds.length) {
-      return NextResponse.json({ error: 'Invalid members list' }, { status: 400 })
+  return NextResponse.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid members list' } }, { status: 400 })
     }
   // Removed department uniformity requirement (cross-department collaboration allowed)
 
@@ -68,10 +68,10 @@ export async function POST(request) {
       }
     } catch {}
 
-    return NextResponse.json({ success: true, project })
+  return NextResponse.json({ ok: true, data: project })
   } catch (error) {
     console.error('Project create error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  return NextResponse.json({ ok: false, error: { code: 'SERVER_ERROR', message: 'Internal server error' } }, { status: 500 })
   }
 }
 
@@ -79,7 +79,7 @@ export async function POST(request) {
 export async function GET(request) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!session) return NextResponse.json({ ok: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 })
     await dbConnect()
 
     const { searchParams } = new URL(request.url)
@@ -117,10 +117,10 @@ export async function GET(request) {
       .populate('internalGuide', 'academicInfo.name email')
       .sort({ createdAt: -1 })
 
-    return NextResponse.json({ projects })
+  return NextResponse.json({ ok: true, data: projects })
   } catch (error) {
     console.error('Project list error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  return NextResponse.json({ ok: false, error: { code: 'SERVER_ERROR', message: 'Internal server error' } }, { status: 500 })
   }
 }
 
@@ -128,33 +128,33 @@ export async function GET(request) {
 export async function PATCH(request) {
   try {
     const session = await getServerSession(authOptions)
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  if (!session) return NextResponse.json({ ok: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 })
 
     await dbConnect()
     const body = await request.json()
     const { projectId, approve, internalGuideId, externalGuide, addMember, removeMember } = body
     const project = await ProjectGroup.findById(projectId)
-    if (!project) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (!project) return NextResponse.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Project not found' } }, { status: 404 })
 
     // Add member (student can add to own project; hod/admin can add; leader only)
     if (addMember) {
       if (session.user.role === 'student' && String(project.leader) !== String(session.user.id)) {
-        return NextResponse.json({ error: 'Only leader can add members' }, { status: 403 })
+  return NextResponse.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Only leader can add members' } }, { status: 403 })
       }
       if (!['admin','hod','student'].includes(session.user.role)) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  return NextResponse.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Forbidden' } }, { status: 403 })
       }
       const isObjectId = /^[0-9a-fA-F]{24}$/.test(addMember)
       const lookup = isObjectId ? { _id: addMember } : { email: addMember.toLowerCase() }
       const user = await User.findOne(lookup)
-      if (!user || user.role !== 'student') return NextResponse.json({ error: 'Student not found' }, { status: 400 })
-      if (user.department !== project.department) return NextResponse.json({ error: 'Department mismatch' }, { status: 400 })
+  if (!user || user.role !== 'student') return NextResponse.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Student not found' } }, { status: 400 })
+  if (user.department !== project.department) return NextResponse.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Department mismatch' } }, { status: 400 })
       const already = project.members.find(m => String(m.student) === String(user._id))
-      if (already) return NextResponse.json({ error: 'Already a member' }, { status: 400 })
+  if (already) return NextResponse.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Already a member' } }, { status: 400 })
       project.members.push({ student: user._id, role: 'member' })
       await project.save()
       try { if (global.io) global.io.to(`user-${user._id}`).emit('project:added', { projectId: project._id, groupId: project.groupId }) } catch {}
-      return NextResponse.json({ success: true, project })
+  return NextResponse.json({ ok: true, data: project })
     }
 
     if (removeMember) {
@@ -167,17 +167,17 @@ export async function PATCH(request) {
       }
       const memberDocLookup = /^[0-9a-fA-F]{24}$/.test(removeMember) ? { _id: removeMember } : { email: removeMember.toLowerCase() }
       const memberDoc = await User.findOne(memberDocLookup)
-      if (!memberDoc) return NextResponse.json({ error: 'Member not found' }, { status: 400 })
-      if (String(memberDoc._id) === String(project.leader)) return NextResponse.json({ error: 'Cannot remove leader' }, { status: 400 })
+  if (!memberDoc) return NextResponse.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Member not found' } }, { status: 400 })
+  if (String(memberDoc._id) === String(project.leader)) return NextResponse.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Cannot remove leader' } }, { status: 400 })
       const before = project.members.length
       project.members = project.members.filter(m => String(m.student) !== String(memberDoc._id))
-      if (project.members.length === before) return NextResponse.json({ error: 'Not a member' }, { status: 400 })
+  if (project.members.length === before) return NextResponse.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Not a member' } }, { status: 400 })
       await project.save()
-      return NextResponse.json({ success: true, project })
+  return NextResponse.json({ ok: true, data: project })
     }
 
     if (session.user.role !== 'hod' && session.user.role !== 'admin') {
-      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+      return NextResponse.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Forbidden' } }, { status: 403 })
     }
 
     if (typeof approve === 'boolean') {
@@ -186,7 +186,7 @@ export async function PATCH(request) {
     if (internalGuideId) {
       const faculty = await User.findById(internalGuideId)
       if (!faculty || !['faculty', 'hod'].includes(faculty.role)) {
-        return NextResponse.json({ error: 'Invalid internal guide' }, { status: 400 })
+        return NextResponse.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid internal guide' } }, { status: 400 })
       }
       project.internalGuide = faculty._id
       try {
@@ -207,10 +207,10 @@ export async function PATCH(request) {
 
     await project.save()
 
-    return NextResponse.json({ success: true, project })
+  return NextResponse.json({ ok: true, data: project })
   } catch (error) {
     console.error('Project update error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  return NextResponse.json({ ok: false, error: { code: 'SERVER_ERROR', message: 'Internal server error' } }, { status: 500 })
   }
 }
 

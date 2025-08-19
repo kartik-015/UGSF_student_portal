@@ -10,7 +10,7 @@ export async function POST(request) {
     
     const session = await getServerSession(authOptions)
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ ok: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 })
     }
 
     const body = await request.json()
@@ -36,15 +36,15 @@ export async function POST(request) {
     const isStaff = ['faculty', 'hod', 'counselor'].includes(role)
     const missingCommon = !name || !phoneNumber || !address || !department
     if (missingCommon) {
-      return NextResponse.json({ error: 'Name, phone number, address and department are required' }, { status: 400 })
+      return NextResponse.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Name, phone number, address and department are required' } }, { status: 400 })
     }
     if (isStudent) {
       if (!rollNumber || !admissionYear || !semester || !section) {
-        return NextResponse.json({ error: 'Student academic fields are required' }, { status: 400 })
+        return NextResponse.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Student academic fields are required' } }, { status: 400 })
       }
     } else if (isStaff) {
       if (!specialization || !education) {
-        return NextResponse.json({ error: 'Specialization and education are required for staff' }, { status: 400 })
+        return NextResponse.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Specialization and education are required for staff' } }, { status: 400 })
       }
     }
 
@@ -73,16 +73,12 @@ export async function POST(request) {
     )
 
     if (!updatedUser) {
-      return NextResponse.json(
-        { error: 'User not found' }, 
-        { status: 404 }
-      )
+      return NextResponse.json({ ok: false, error: { code: 'NOT_FOUND', message: 'User not found' } }, { status: 404 })
     }
 
     const res = NextResponse.json({ 
-      success: true,
-      message: 'Profile updated successfully',
-      user: {
+      ok: true,
+      data: {
         id: updatedUser._id,
         email: updatedUser.email,
         role: updatedUser.role,
@@ -101,9 +97,6 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Error updating user profile:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' }, 
-      { status: 500 }
-    )
+  return NextResponse.json({ ok: false, error: { code: 'SERVER_ERROR', message: 'Internal server error' } }, { status: 500 })
   }
 }

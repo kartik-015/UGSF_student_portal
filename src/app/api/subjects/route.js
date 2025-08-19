@@ -10,7 +10,7 @@ export async function GET(request) {
     const session = await getServerSession(authOptions)
     
     if (!session) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ ok: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 })
     }
 
     await dbConnect()
@@ -39,11 +39,11 @@ export async function GET(request) {
       .populate('faculty', 'email academicInfo.name')
       .sort({ code: 1 })
 
-    return NextResponse.json({ subjects })
+  return NextResponse.json({ ok: true, data: subjects })
 
   } catch (error) {
     console.error('Subjects GET error:', error)
-    return NextResponse.json({ message: 'Internal server error' }, { status: 500 })
+  return NextResponse.json({ ok: false, error: { code: 'SERVER_ERROR', message: 'Internal server error' } }, { status: 500 })
   }
 }
 
@@ -52,11 +52,11 @@ export async function POST(request) {
     const session = await getServerSession(authOptions)
     
     if (!session) {
-      return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ ok: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 })
     }
 
     if (!['admin', 'faculty'].includes(session.user.role)) {
-      return NextResponse.json({ message: 'Access denied' }, { status: 403 })
+      return NextResponse.json({ ok: false, error: { code: 'FORBIDDEN', message: 'Access denied' } }, { status: 403 })
     }
 
     await dbConnect()
@@ -66,13 +66,13 @@ export async function POST(request) {
 
     // Validate required fields
     if (!code || !name || !department || !semester || !credits) {
-      return NextResponse.json({ message: 'Missing required fields' }, { status: 400 })
+      return NextResponse.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing required fields' } }, { status: 400 })
     }
 
     // Check if subject code already exists
     const existingSubject = await Subject.findOne({ code })
     if (existingSubject) {
-      return NextResponse.json({ message: 'Subject code already exists' }, { status: 400 })
+      return NextResponse.json({ ok: false, error: { code: 'DUPLICATE', message: 'Subject code already exists' } }, { status: 400 })
     }
 
     // Validate faculty exists if provided
@@ -80,7 +80,7 @@ export async function POST(request) {
     if (faculty && session.user.role === 'admin') {
       const facultyUser = await User.findById(faculty)
       if (!facultyUser || facultyUser.role !== 'faculty') {
-        return NextResponse.json({ message: 'Invalid faculty ID' }, { status: 400 })
+        return NextResponse.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid faculty ID' } }, { status: 400 })
       }
     } else if (session.user.role === 'faculty') {
       facultyId = session.user.id
@@ -100,8 +100,8 @@ export async function POST(request) {
     await subject.save()
 
     return NextResponse.json({ 
-      message: 'Subject created successfully',
-      subject: {
+      ok: true,
+      data: {
         id: subject._id,
         code: subject.code,
         name: subject.name,
@@ -113,6 +113,6 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Subjects POST error:', error)
-    return NextResponse.json({ message: 'Internal server error' }, { status: 500 })
+  return NextResponse.json({ ok: false, error: { code: 'SERVER_ERROR', message: 'Internal server error' } }, { status: 500 })
   }
 } 

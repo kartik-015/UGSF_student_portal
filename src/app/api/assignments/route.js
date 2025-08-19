@@ -10,7 +10,7 @@ export async function GET(request) {
     
     const session = await getServerSession(authOptions)
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ ok: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -37,17 +37,11 @@ export async function GET(request) {
       .populate('faculty', 'academicInfo.name')
       .sort({ createdAt: -1 })
 
-    return NextResponse.json({ 
-      assignments,
-      success: true 
-    })
+  return NextResponse.json({ ok: true, data: assignments })
 
   } catch (error) {
     console.error('Error fetching assignments:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' }, 
-      { status: 500 }
-    )
+  return NextResponse.json({ ok: false, error: { code: 'SERVER_ERROR', message: 'Internal server error' } }, { status: 500 })
   }
 }
 
@@ -57,17 +51,14 @@ export async function POST(request) {
     
     const session = await getServerSession(authOptions)
     if (!session || session.user.role !== 'faculty') {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ ok: false, error: { code: 'UNAUTHORIZED', message: 'Unauthorized' } }, { status: 401 })
     }
 
     const body = await request.json()
     const { title, description, subject, dueDate, maxMarks } = body
 
     if (!title || !description || !subject || !dueDate || !maxMarks) {
-      return NextResponse.json(
-        { error: 'Missing required fields' }, 
-        { status: 400 }
-      )
+      return NextResponse.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing required fields' } }, { status: 400 })
     }
 
     const assignment = new Assignment({
@@ -81,17 +72,10 @@ export async function POST(request) {
 
     await assignment.save()
 
-    return NextResponse.json({ 
-      assignment,
-      success: true,
-      message: 'Assignment created successfully'
-    })
+  return NextResponse.json({ ok: true, data: assignment })
 
   } catch (error) {
     console.error('Error creating assignment:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' }, 
-      { status: 500 }
-    )
+  return NextResponse.json({ ok: false, error: { code: 'SERVER_ERROR', message: 'Internal server error' } }, { status: 500 })
   }
 } 

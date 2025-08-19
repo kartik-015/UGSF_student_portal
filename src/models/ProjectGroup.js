@@ -53,6 +53,11 @@ const projectGroupSchema = new mongoose.Schema({
   leader: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   internalGuide: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   externalGuide: externalGuideSchema,
+  hodApproval: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending',
+  },
   status: {
     type: String,
     enum: ['draft', 'submitted', 'under-review', 'approved', 'rejected'],
@@ -79,5 +84,6 @@ projectGroupSchema.pre('save', function(next) {
 const ProjectGroup = mongoose.models.ProjectGroup || mongoose.model('ProjectGroup', projectGroupSchema)
 
 export default ProjectGroup
+
 
 

@@ -13,13 +13,24 @@ app.prepare().then(() => {
 
   const io = new Server(server, {
     cors: {
-      origin: process.env.NEXTAUTH_URL || "http://localhost:3000",
-      methods: ["GET", "POST", "PUT", "DELETE"]
+    // In dev reflect the request origin to avoid mismatches; in production set NEXTAUTH_URL env var
+    origin: process.env.NEXTAUTH_URL || true,
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
     }
   })
 
+  // Increase heartbeat settings to tolerate proxies and slow networks
+  io.engine.pingInterval = 25000
+  io.engine.pingTimeout = 60000
+
   io.on('connection', (socket) => {
-    console.log('Client connected:', socket.id)
+    console.log('Client connected:', socket.id, 'from', socket.handshake.address)
+
+    // Add basic health checks
+    socket.on('error', (err) => {
+      console.error('Socket error for', socket.id, err)
+    })
 
     socket.on('join-room', (room) => {
       socket.join(room)
@@ -31,8 +42,14 @@ app.prepare().then(() => {
       console.log(`Client ${socket.id} left room: ${room}`)
     })
 
-    socket.on('disconnect', () => {
-      console.log('Client disconnected:', socket.id)
+    socket.on('keepalive', () => {
+      // Optionally, we can touch the socket so the server knows client is alive
+      // Minimal logging to avoid noise
+      // console.debug(`Keepalive from ${socket.id}`)
+    })
+
+    socket.on('disconnect', (reason) => {
+      console.log('Client disconnected:', socket.id, 'reason:', reason)
     })
   })
 

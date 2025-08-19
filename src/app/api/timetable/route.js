@@ -2,120 +2,35 @@ import { NextResponse } from 'next/server'
 import dbConnect from '@/lib/mongodb'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '../auth/[...nextauth]/route'
+import Timetable from '@/models/Timetable'
+import Subject from '@/models/Subject'
 
 export async function GET(request) {
   try {
     await dbConnect()
-    
+
     const session = await getServerSession(authOptions)
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { searchParams } = new URL(request.url)
-    const day = searchParams.get('day') || 'monday'
+    const day = (searchParams.get('day') || 'monday').toLowerCase()
+    let department = searchParams.get('department')
 
-    // Mock timetable data - in a real implementation, you would query the database
-    const mockTimetable = [
-      {
-        _id: '1',
-        day: 'monday',
-        startTime: '09:00',
-        endTime: '10:00',
-        subject: {
-          _id: '1',
-          code: 'CS301',
-          name: 'Data Structures'
-        },
-        faculty: {
-          _id: '1',
-          academicInfo: {
-            name: 'Dr. John Smith'
-          }
-        },
-        room: 'Room 101'
-      },
-      {
-        _id: '2',
-        day: 'monday',
-        startTime: '10:00',
-        endTime: '11:00',
-        subject: {
-          _id: '2',
-          code: 'CS302',
-          name: 'Database Systems'
-        },
-        faculty: {
-          _id: '1',
-          academicInfo: {
-            name: 'Dr. John Smith'
-          }
-        },
-        room: 'Room 102'
-      },
-      {
-        _id: '3',
-        day: 'monday',
-        startTime: '11:15',
-        endTime: '12:15',
-        subject: {
-          _id: '3',
-          code: 'IT301',
-          name: 'Web Development'
-        },
-        faculty: {
-          _id: '2',
-          academicInfo: {
-            name: 'Dr. Jane Doe'
-          }
-        },
-        room: 'Lab 201'
-      },
-      {
-        _id: '4',
-        day: 'tuesday',
-        startTime: '09:00',
-        endTime: '10:00',
-        subject: {
-          _id: '1',
-          code: 'CS301',
-          name: 'Data Structures'
-        },
-        faculty: {
-          _id: '1',
-          academicInfo: {
-            name: 'Dr. John Smith'
-          }
-        },
-        room: 'Room 101'
-      },
-      {
-        _id: '5',
-        day: 'wednesday',
-        startTime: '14:00',
-        endTime: '15:00',
-        subject: {
-          _id: '2',
-          code: 'CS302',
-          name: 'Database Systems'
-        },
-        faculty: {
-          _id: '1',
-          academicInfo: {
-            name: 'Dr. John Smith'
-          }
-        },
-        room: 'Room 102'
-      }
-    ]
+    // Non-admin users can only view their own department timetable
+    if (session.user.role !== 'admin') {
+      department = session.user.department || department
+    }
 
-    // Filter by day
-    const timetable = mockTimetable.filter(item => item.day === day)
+    if (!department) {
+      return NextResponse.json({ error: 'Department required' }, { status: 400 })
+    }
 
-    return NextResponse.json({ 
-      timetable,
-      success: true 
-    })
+    const query = { department: department, day }
+    const rows = await Timetable.find(query).sort({ startTime: 1 }).lean()
+
+    return NextResponse.json({ timetable: rows || [], success: true })
 
   } catch (error) {
     console.error('Error fetching timetable:', error)
@@ -128,7 +43,7 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const session = await getServerSession()
+  const session = await getServerSession(authOptions)
     
     if (!session) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })

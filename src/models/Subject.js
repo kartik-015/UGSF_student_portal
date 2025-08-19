@@ -19,7 +19,7 @@ const subjectSchema = new mongoose.Schema({
     type: Number,
     required: true,
     min: 1,
-    max: 8,
+    max: 6,
   },
   credits: {
     type: Number,
@@ -41,6 +41,8 @@ const subjectSchema = new mongoose.Schema({
   timestamps: true,
 })
 
+subjectSchema.index({ code: 1, department: 1 }, { unique: true })
+
 const Subject = mongoose.models.Subject || mongoose.model('Subject', subjectSchema)
 
-export default Subject 
+export default Subject

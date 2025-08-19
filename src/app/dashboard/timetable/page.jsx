@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useSession } from 'next-auth/react'
 import { motion, useScroll, useTransform } from 'framer-motion'
 import { Calendar, Clock, MapPin, Users, Sparkles, Zap, CalendarDays } from 'lucide-react'
@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 
 export default function TimetablePage() {
   const { data: session } = useSession()
+  const [department, setDepartment] = useState(session?.user?.department || 'CSE')
   const [timetable, setTimetable] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedDay, setSelectedDay] = useState('monday')
@@ -16,7 +17,9 @@ export default function TimetablePage() {
 
   const fetchTimetable = useCallback(async () => {
     try {
-      const response = await fetch(`/api/timetable?day=${selectedDay}`)
+    // If admin, allow selecting department via UI; else use user's department
+    const deptParam = session?.user?.role === 'admin' ? department : (session?.user?.department || '')
+    const response = await fetch(`/api/timetable?day=${selectedDay}&department=${encodeURIComponent(deptParam)}`)
       if (response.ok) {
         const data = await response.json()
         setTimetable(data.timetable || [])
@@ -30,6 +33,7 @@ export default function TimetablePage() {
     }
   }, [selectedDay])
 
+
   useEffect(() => {
     fetchTimetable()
   }, [fetchTimetable])
@@ -42,6 +46,57 @@ export default function TimetablePage() {
     { value: 'friday', label: 'Friday' },
     { value: 'saturday', label: 'Saturday' },
   ]
+
+  const fileInputRef = useRef(null)
+
+  const handleFile = async (file) => {
+    if (!file) return
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      // Dynamically import xlsx to avoid SSR issues
+      const XLSX = await import('xlsx')
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' })
+      const sheetName = workbook.SheetNames[0]
+      const sheet = workbook.Sheets[sheetName]
+      const json = XLSX.utils.sheet_to_json(sheet)
+
+      // Expect columns: day, startTime, endTime, subjectCode, subjectName, facultyId, room, department
+      const entries = json.map(row => ({
+        day: String(row.day || row.Day || row.D).toLowerCase(),
+        startTime: String(row.startTime || row.Start || row['Start Time'] || ''),
+        endTime: String(row.endTime || row.End || row['End Time'] || ''),
+        subjectCode: String(row.subjectCode || row['Subject Code'] || row.Code || ''),
+        subjectName: String(row.subjectName || row['Subject Name'] || row.Name || ''),
+        facultyId: row.facultyId || null,
+        room: row.room || row.Room || '',
+        department: String(row.department || row.Department || '' ) || department
+      })).filter(e => e.day && e.startTime && e.subjectCode)
+
+      if (entries.length === 0) {
+        toast.error('No valid rows found in Excel')
+        return
+      }
+
+      const res = await fetch('/api/admin/timetable-import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ entries })
+      })
+
+      if (res.ok) {
+        const data = await res.json()
+        toast.success(`Imported ${data.imported} entries`)
+        fetchTimetable()
+      } else {
+        toast.error('Import failed')
+      }
+    } catch (err) {
+      console.error('Import error', err)
+      toast.error('Error reading file')
+    }
+  }
+
+  const onUploadClick = () => fileInputRef.current?.click()
 
   const timeSlots = [
     { start: '09:00', end: '10:00', period: '1st Period' },
@@ -144,6 +199,17 @@ export default function TimetablePage() {
               }}
             />
           </div>
+          {session?.user?.role === 'admin' && (
+            <div className="flex items-center gap-3">
+              <select value={department} onChange={(e) => setDepartment(e.target.value)} className="px-3 py-2 rounded-md border">
+                <option value="CSE">CSE</option>
+                <option value="CE">CE</option>
+                <option value="IT">IT</option>
+              </select>
+              <input ref={fileInputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={(e) => handleFile(e.target.files?.[0])} />
+              <button onClick={onUploadClick} className="px-4 py-2 bg-blue-600 text-white rounded-lg shadow hover:bg-blue-700">Import Timetable (Excel)</button>
+            </div>
+          )}
         </div>
 
         {/* Enhanced Day Selector */}

@@ -40,6 +40,7 @@ const submissionSchema = new mongoose.Schema({
 }, {
   timestamps: true,
 })
+  submissionSchema.index({ assignment: 1, student: 1 }, { unique: true })
 
 // Check if submission is late
 submissionSchema.pre('save', function(next) {

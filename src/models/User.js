@@ -13,6 +13,7 @@ const userSchema = new mongoose.Schema({
     unique: true,
     lowercase: true,
     trim: true,
+    index: { unique: true },
   },
   password: {
     type: String,
@@ -20,8 +21,13 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['student', 'admin', 'faculty', 'hod'],
+    enum: ['student', 'admin', 'faculty', 'hod', 'counselor'],
     default: 'student',
+  },
+  counselorId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: false,
   },
   department: {
     type: String,
