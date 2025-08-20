@@ -1,4 +1,4 @@
-# Student Portal - Charusat University
+# Student Portal - Charusat University by yash
 
 A comprehensive full-stack student management portal built with Next.js, MongoDB, and Tailwind CSS. Features role-based access control, real-time notifications, and modern UI inspired by Notion and Google Classroom.
 
