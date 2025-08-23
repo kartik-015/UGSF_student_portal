@@ -24,10 +24,23 @@ export async function GET(request) {
     const department = searchParams.get('department')
     const semester = searchParams.get('semester')
 
+
     let query = { role: 'student', isActive: true }
 
+    // For HOD: allow filtering by any department if selected, otherwise default to their own
     if (session.user.role === 'hod') {
-      query.department = session.user.department
+      if (searchParams.has('department')) {
+        // If the filter is present (even if empty), do not restrict department
+        if (department) {
+          query.department = department
+        }
+        // else: no department filter, show all
+      } else {
+        // If filter is not present at all, default to HOD's department
+        query.department = session.user.department
+      }
+    } else if (department) {
+      query.department = department
     }
 
     // Additional filters
@@ -37,10 +50,6 @@ export async function GET(request) {
         { 'academicInfo.name': { $regex: search, $options: 'i' } },
         { 'academicInfo.rollNumber': { $regex: search, $options: 'i' } }
       ]
-    }
-
-    if (department) {
-      query.department = department
     }
 
     if (semester) {

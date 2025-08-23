@@ -19,7 +19,9 @@ export async function POST(request) {
     await dbConnect()
 
     const body = await request.json()
-    const { title, description, domain, department, semester, members = [], memberEmails = [] } = body
+
+    let { title, description, domain, department, semester, members = [], memberEmails = [] } = body
+    if (department) department = department.toUpperCase();
 
     if (!title || !department || !semester) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -94,9 +96,11 @@ export async function GET(request) {
       // Faculty should only see groups explicitly assigned to them as internal guide
       filter = { internalGuide: session.user.id }
     } else if (role === 'hod') {
-      // HOD sees groups whose LEADER is from their department
-      const leaderIds = await User.find({ role: 'student', department: session.user.department }).distinct('_id')
-      filter = { leader: { $in: leaderIds } }
+      // HOD sees all projects where the project.department matches their department
+      const hodDept = session.user.department ? session.user.department.toUpperCase() : '';
+      console.log('HOD department:', hodDept)
+      filter = { department: hodDept }
+      console.log('HOD project filter:', filter)
     } else if (role === 'admin') {
       // admin optional filters
       if (qDept) filter.department = qDept.toUpperCase()
@@ -116,6 +120,10 @@ export async function GET(request) {
       .populate('members.student', 'academicInfo.name email department admissionYear')
       .populate('internalGuide', 'academicInfo.name email')
       .sort({ createdAt: -1 })
+
+    if (role === 'hod') {
+      console.log('HOD Project Count:', projects.length)
+    }
 
     return NextResponse.json({ projects })
   } catch (error) {

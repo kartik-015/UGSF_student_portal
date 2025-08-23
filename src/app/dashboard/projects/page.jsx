@@ -57,6 +57,7 @@ export default function ProjectsPage() {
     try {
       const payload = { ...form }
       if (!payload.department) payload.department = session?.user?.department
+      if (payload.department) payload.department = payload.department.toUpperCase();
       // Build memberEmails from memberInputs (ignore blanks)
       const memberEmails = memberInputs.map(m=>m.trim()).filter(Boolean)
       payload.memberEmails = memberEmails

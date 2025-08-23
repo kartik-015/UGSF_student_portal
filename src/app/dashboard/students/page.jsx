@@ -17,10 +17,9 @@ export default function StudentsPage() {
   const fetchStudents = useCallback(async () => {
     try {
       const params = new URLSearchParams()
+      params.append('department', selectedDepartment ?? '')
+      params.append('semester', selectedSemester ?? '')
       if (searchTerm) params.append('search', searchTerm)
-      if (selectedDepartment) params.append('department', selectedDepartment)
-      if (selectedSemester) params.append('semester', selectedSemester)
-      
       const response = await fetch(`/api/students?${params}`)
       if (response.ok) {
         const data = await response.json()
