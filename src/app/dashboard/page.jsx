@@ -68,13 +68,13 @@ export default function DashboardPage() {
         color: 'from-green-500 to-green-600',
         bgColor: 'bg-green-100 dark:bg-green-900/30'
       },
-      {
-        title: 'Pending Assignments',
-        value: stats.pendingAssignments || 0,
-        icon: FileText,
-        color: 'from-orange-500 to-orange-600',
-        bgColor: 'bg-orange-100 dark:bg-orange-900/30'
-      },
+      // {
+      //   title: 'Pending Assignments',
+      //   value: stats.pendingAssignments || 0,
+      //   icon: FileText,
+      //   color: 'from-orange-500 to-orange-600',
+      //   bgColor: 'bg-orange-100 dark:bg-orange-900/30'
+      // },
       {
         title: 'Average Grade',
         value: `${stats.averageGrade || 0}%`,

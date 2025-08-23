@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useTheme } from '@/components/providers/ThemeProvider'
 import { useSession } from 'next-auth/react'
 import { motion } from 'framer-motion'
 import { 
@@ -27,7 +28,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('profile')
   const [showPassword, setShowPassword] = useState(false)
-  const [darkMode, setDarkMode] = useState(false)
+  const { theme, toggleTheme } = useTheme()
   const [notifications, setNotifications] = useState({
     email: true,
     push: true,
@@ -139,11 +140,7 @@ export default function SettingsPage() {
     }))
   }
 
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode)
-    // Here you would typically update the theme in your app
-    document.documentElement.classList.toggle('dark')
-  }
+
 
   return (
     <div className="space-y-6">
@@ -439,16 +436,18 @@ export default function SettingsPage() {
                         </p>
                       </div>
                       <button
-                        onClick={toggleDarkMode}
+                        onClick={toggleTheme}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-200 ${
-                          darkMode ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'
+                          theme === 'dark' ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'
                         }`}
+                        aria-label="Toggle dark mode"
                       >
                         <span
                           className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
-                            darkMode ? 'translate-x-6' : 'translate-x-1'
+                            theme === 'dark' ? 'translate-x-6' : 'translate-x-1'
                           }`}
                         />
+                        <span className="sr-only">Toggle dark mode</span>
                       </button>
                     </div>
                   </div>
