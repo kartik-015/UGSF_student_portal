@@ -7,11 +7,21 @@ const SocketContext = createContext()
 
 export function SocketProvider({ children }) {
   const [socket, setSocket] = useState(null)
-
-  // Track the active department and timetables by department.
+  const [isConnected, setIsConnected] = useState(false)
   const [activeDeptId, setActiveDeptId] = useState(null)
-  const [timetables, setTimetables] = useState({}) // { [deptId]: timetableData }
+  const [timetables, setTimetables] = useState({})
   const activeDeptRef = useRef(null)
+
+  // Restore last selected department on mount
+  useEffect(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? window.localStorage.getItem('activeDeptId') : null
+      if (saved) {
+        activeDeptRef.current = saved
+        setActiveDeptId(saved)
+      }
+    } catch {}
+  }, [])
 
   useEffect(() => {
     // Allow engine.io to choose the best transport (polling -> websocket).
@@ -27,15 +37,19 @@ export function SocketProvider({ children }) {
     setSocket(socketInstance)
 
     socketInstance.on('connect', () => {
+      setIsConnected(true)
       // eslint-disable-next-line no-console
       console.info('Socket connected', socketInstance.id)
-      // Re-join the active department room on reconnect so timetable events resume.
       if (activeDeptRef.current) {
-        try { socketInstance.emit('dept:join', { deptId: activeDeptRef.current }) } catch (_) {}
+        try {
+          socketInstance.emit('dept:join', { deptId: activeDeptRef.current })
+          socketInstance.emit('timetable:fetch', { deptId: activeDeptRef.current }) // proactively request latest
+        } catch {}
       }
     })
 
     socketInstance.on('connect_error', (err) => {
+      setIsConnected(false)
       // eslint-disable-next-line no-console
       console.error('Socket connect_error', err)
     })
@@ -46,6 +60,7 @@ export function SocketProvider({ children }) {
     })
 
     socketInstance.on('disconnect', (reason) => {
+      setIsConnected(false)
       // eslint-disable-next-line no-console
       console.warn('Socket disconnected:', reason)
     })
@@ -55,14 +70,12 @@ export function SocketProvider({ children }) {
       console.error('Socket error:', err)
     })
 
-    // Timetable events (server should emit these to the department room)
+    // Timetable events
     socketInstance.on('timetable:updated', ({ deptId, timetable }) => {
-      // Store/update the department’s timetable. UI shows nothing if absent.
       setTimetables((prev) => ({ ...prev, [deptId]: timetable }))
     })
 
     socketInstance.on('timetable:cleared', ({ deptId }) => {
-      // Remove timetable so the UI shows nothing by default.
       setTimetables((prev) => {
         const next = { ...prev }
         delete next[deptId]
@@ -71,7 +84,6 @@ export function SocketProvider({ children }) {
     })
 
     socketInstance.on('timetable:not-found', ({ deptId }) => {
-      // Explicitly ensure nothing is shown if server reports missing timetable.
       setTimetables((prev) => {
         const next = { ...prev }
         delete next[deptId]
@@ -79,7 +91,7 @@ export function SocketProvider({ children }) {
       })
     })
 
-    // Periodic keepalive to help with proxies / NAT timeouts
+    // Periodic keepalive
     let keepaliveTimer = null
     const startKeepalive = () => {
       if (keepaliveTimer) return
@@ -99,24 +111,64 @@ export function SocketProvider({ children }) {
     }
   }, [])
 
-  // Select or change the active department. Joins/leaves rooms as needed.
+  // Fetch latest timetable via HTTP as a fallback (and can be called on-demand)
+  const refreshTimetable = async (deptIdArg) => {
+    const dept = deptIdArg || activeDeptRef.current
+    if (!dept) return null
+    try {
+      const res = await fetch(`/api/timetable?deptId=${encodeURIComponent(dept)}`)
+      if (res.ok) {
+        const timetable = await res.json()
+        setTimetables((prev) => ({ ...prev, [dept]: timetable }))
+        return timetable
+      }
+      if (res.status === 404) {
+        setTimetables((prev) => {
+          const next = { ...prev }
+          delete next[dept]
+          return next
+        })
+        return null
+      }
+    } catch {}
+    return null
+  }
+
+  const clearTimetableCache = (deptIdArg) => {
+    const dept = deptIdArg || activeDeptRef.current
+    if (!dept) return
+    setTimetables((prev) => {
+      const next = { ...prev }
+      delete next[dept]
+      return next
+    })
+  }
+
+  // Select or change the active department
   const selectDepartment = (deptId) => {
     const prev = activeDeptRef.current
     if (socket?.connected) {
       if (prev && prev !== deptId) {
-        try { socket.emit('dept:leave', { deptId: prev }) } catch (_) {}
+        try { socket.emit('dept:leave', { deptId: prev }) } catch {}
       }
       if (deptId) {
-        try { socket.emit('dept:join', { deptId }) } catch (_) {}
+        try {
+          socket.emit('dept:join', { deptId })
+          socket.emit('timetable:fetch', { deptId }) // request latest for this dept
+        } catch {}
       }
     }
     activeDeptRef.current = deptId || null
     setActiveDeptId(deptId || null)
-    // Do not force-clear cached timetables; UI can still read historical for other depts if needed.
-    // The "active" view should use activeTimetable below which returns null when absent.
+    try {
+      if (deptId) localStorage.setItem('activeDeptId', deptId)
+      else localStorage.removeItem('activeDeptId')
+    } catch {}
+    // Fallback to HTTP fetch in case socket doesn't return anything
+    if (deptId) refreshTimetable(deptId)
   }
 
-  // Current department’s timetable or null (UI shows nothing by default).
+  // Current department’s timetable or null
   const activeTimetable = activeDeptId ? (timetables[activeDeptId] ?? null) : null
 
   // Minimal helper to upload an Excel file (admin UI can call this).
@@ -137,15 +189,15 @@ export function SocketProvider({ children }) {
   return (
     <SocketContext.Provider
       value={{
-        // existing
         socket,
-        connected: !!socket?.connected,
-        // new
+        connected: isConnected,
         activeDeptId,
         selectDepartment,
         timetables,
         activeTimetable,
-        uploadTimetable
+        uploadTimetable,
+        refreshTimetable,
+        clearTimetableCache
       }}
     >
       {children}
