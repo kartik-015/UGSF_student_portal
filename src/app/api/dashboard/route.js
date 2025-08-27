@@ -39,10 +39,7 @@ export async function GET() {
         activities = await getFacultyActivities(userId)
         break
       
-      case 'counselor':
-        stats = await getCounselorStats(userId)
-        activities = await getCounselorActivities(userId)
-        break
+  // counselor role removed; no special case
       case 'hod':
         stats = await getHodStats(userId)
         activities = await getHodActivities(userId)
@@ -74,8 +71,9 @@ async function getAdminStats() {
     activeSubjects,
     pendingAssignments
   ] = await Promise.all([
-    User.countDocuments({ role: 'student' }),
-    User.countDocuments({ role: 'counselor' }),
+  User.countDocuments({ role: 'student' }),
+  // count academic staff (faculty + hod)
+  User.countDocuments({ role: { $in: ['faculty','hod'] } }),
     Subject.countDocuments({ isActive: true }),
     Assignment.countDocuments({ dueDate: { $gte: new Date() } })
   ])
@@ -105,7 +103,7 @@ async function getHodStats(userId) {
 }
 
 async function getStudentStats(userId) {
-  const user = await User.findById(userId).populate('counselor')
+  const user = await User.findById(userId)
   
   const [
     enrolledSubjects,
@@ -155,27 +153,6 @@ async function getFacultyStats(userId) {
   }
 }
 
-async function getCounselorStats(userId) {
-  const [
-    assignedStudents,
-    progressReports,
-    alerts,
-    averagePerformance
-  ] = await Promise.all([
-    User.countDocuments({ counselor: userId }),
-    Submission.countDocuments({ student: { $in: await User.find({ counselor: userId }).distinct('_id') } }),
-    0, // Placeholder for alerts
-    85 // Placeholder for average performance
-  ])
-
-  return {
-    assignedStudents,
-    progressReports,
-    alerts,
-    averagePerformance
-  }
-}
-
 async function getDefaultStats() {
   return {
     totalStudents: 0,
@@ -220,18 +197,6 @@ async function getFacultyActivities(userId) {
     title: 'Assignment Created',
     time: formatTimeAgo(assignment.createdAt),
     description: assignment.title
-  }))
-}
-
-async function getCounselorActivities(userId) {
-  const assignedStudents = await User.find({ counselor: userId })
-    .sort({ lastLogin: -1 })
-    .limit(5)
-
-  return assignedStudents.map(student => ({
-    title: 'Student Activity',
-    time: formatTimeAgo(student.lastLogin),
-    description: student.academicInfo?.name || student.email
   }))
 }
 

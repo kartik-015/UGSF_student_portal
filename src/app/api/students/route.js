@@ -23,6 +23,9 @@ export async function GET(request) {
     const search = searchParams.get('search')
     const department = searchParams.get('department')
     const semester = searchParams.get('semester')
+  const semesterParity = searchParams.get('semesterParity')
+  const university = searchParams.get('university')
+  const institute = searchParams.get('institute')
 
 
     let query = { role: 'student', isActive: true }
@@ -37,6 +40,13 @@ export async function GET(request) {
         // else: no department filter, show all
       } else {
         // If filter is not present at all, default to HOD's department
+        query.department = session.user.department
+      }
+    } else if (session.user.role === 'faculty') {
+      // Faculty: if department filter provided, use it; otherwise default to faculty's department
+      if (searchParams.has('department')) {
+        if (department) query.department = department
+      } else {
         query.department = session.user.department
       }
     } else if (department) {
@@ -55,6 +65,17 @@ export async function GET(request) {
     if (semester) {
       query['academicInfo.semester'] = parseInt(semester)
     }
+
+    if (semesterParity) {
+      if (semesterParity === 'odd') {
+        query['academicInfo.semester'] = { $in: [1,3,5,7] }
+      } else if (semesterParity === 'even') {
+        query['academicInfo.semester'] = { $in: [2,4,6,8] }
+      }
+    }
+
+    if (university) query.university = university
+    if (institute) query.institute = institute
 
     const students = await User.find(query)
       .select('-password')
@@ -97,8 +118,8 @@ export async function POST(request) {
 
     await dbConnect()
 
-    const body = await request.json()
-    const { email, password, name, department, admissionYear, semester, section, rollNumber, phoneNumber, address, counselor } = body
+  const body = await request.json()
+  const { email, password, name, department, admissionYear, semester, section, rollNumber, phoneNumber, address } = body
 
     // Validate required fields
     if (!email || !password || !name || !department || !admissionYear) {
@@ -109,15 +130,6 @@ export async function POST(request) {
     const existingUser = await User.findOne({ email: email.toLowerCase() })
     if (existingUser) {
       return NextResponse.json({ message: 'User already exists' }, { status: 400 })
-    }
-
-    // Validate counselor exists if provided
-    let counselorId = counselor
-    if (counselor) {
-      const counselorUser = await User.findById(counselor)
-      if (!counselorUser || counselorUser.role !== 'counselor') {
-        return NextResponse.json({ message: 'Invalid counselor ID' }, { status: 400 })
-      }
     }
 
     const student = new User({
@@ -134,7 +146,7 @@ export async function POST(request) {
         phoneNumber,
         address,
       },
-      counselor: counselorId,
+  // counselor assignment removed
       isRegistered: false
     })
 

@@ -17,15 +17,30 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url)
     const department = searchParams.get('department') || (session.user.role === 'hod' ? session.user.department : null)
     const search = searchParams.get('search')
+    const role = searchParams.get('role')
 
-  // Include all academic staff (faculty + hod) for selection
-  const query = { role: { $in: ['faculty','hod'] }, isActive: true }
-  if (department) query.department = department
+    // Build query for admin/HOD
+    let query = {}
+    if (role) {
+      query.role = role
+    } else {
+      // Default to academic staff only
+      query.role = { $in: ['faculty', 'hod'] }
+    }
+    if (department) query.department = department
+    const university = searchParams.get('university')
+    const institute = searchParams.get('institute')
+    if (university) query.university = university
+    if (institute) query.institute = institute
     if (search) {
       query.$or = [
         { email: { $regex: search, $options: 'i' } },
         { 'academicInfo.name': { $regex: search, $options: 'i' } }
       ]
+    }
+    // For non-admin users (HOD), show only active users by default
+    if (session.user.role !== 'admin') {
+      query.isActive = true
     }
 
     const faculty = await User.find(query)

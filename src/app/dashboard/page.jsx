@@ -169,7 +169,7 @@ export default function DashboardPage() {
     if (role === 'admin') {
       actions.push(
         { name: 'Add Student', icon: Plus, href: '/dashboard/students', color: 'bg-blue-500' },
-        { name: 'Manage Counselors', icon: Users, href: '/dashboard/counselors', color: 'bg-green-500' },
+        { name: 'Manage Faculty', icon: Users, href: '/dashboard/faculty', color: 'bg-green-500' },
         { name: 'View Reports', icon: BarChart3, href: '/dashboard/reports', color: 'bg-purple-500' },
         { name: 'System Settings', icon: Settings, href: '/dashboard/settings', color: 'bg-gray-500' }
       )
