@@ -32,8 +32,8 @@ export async function POST(request) {
 
     // Role-based validation
     const role = session.user.role
-    const isStudent = role === 'student'
-    const isStaff = ['faculty', 'hod', 'counselor'].includes(role)
+  const isStudent = role === 'student'
+  const isStaff = ['faculty', 'hod'].includes(role)
     const missingCommon = !name || !phoneNumber || !address || !department
     if (missingCommon) {
       return NextResponse.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Name, phone number, address and department are required' } }, { status: 400 })

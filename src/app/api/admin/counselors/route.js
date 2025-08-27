@@ -13,8 +13,8 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get all counselors (including approval info)
-    const counselors = await User.find({ role: 'counselor' })
+    // Return academic staff (faculty + hod) for admin UI
+    const counselors = await User.find({ role: { $in: ['faculty','hod'] } })
       .select('-password')
       .sort({ createdAt: -1 })
 
@@ -26,7 +26,7 @@ export async function GET(request) {
   } catch (error) {
     console.error('Error fetching counselors:', error)
     return NextResponse.json(
-      { error: 'Internal server error' }, 
+      { error: 'Internal server error', message: error.message }, 
       { status: 500 }
     )
   }

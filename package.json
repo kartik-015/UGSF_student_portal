@@ -17,6 +17,7 @@
     "cloudinary": "^1.41.3",
     "date-fns": "^2.30.0",
     "dotenv": "^17.2.1",
+    "exceljs": "^4.4.0",
     "framer-motion": "^10.16.16",
     "jsonwebtoken": "^9.0.2",
     "jspdf": "^3.0.1",

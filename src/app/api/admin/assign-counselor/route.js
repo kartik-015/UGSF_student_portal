@@ -37,11 +37,11 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Verify counselor exists
+    // Verify assignee exists and is academic staff (faculty/hod)
     const counselor = await User.findById(counselorId)
-    if (!counselor || counselor.role !== 'counselor') {
+    if (!counselor || !['faculty','hod'].includes(counselor.role)) {
       return NextResponse.json(
-        { error: 'Counselor not found' }, 
+        { error: 'Assignee not found or invalid role' }, 
         { status: 404 }
       )
     }

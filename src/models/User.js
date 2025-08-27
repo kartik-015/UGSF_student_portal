@@ -34,6 +34,14 @@ const userSchema = new mongoose.Schema({
     enum: ['CSE', 'CE', 'IT', 'ME', 'EC', 'CH', 'DIT'],
     required: false,
   },
+  university: {
+    type: String,
+    required: false,
+  },
+  institute: {
+    type: String,
+    required: false,
+  },
   admissionYear: {
     type: Number,
     required: false,
@@ -80,6 +88,16 @@ const userSchema = new mongoose.Schema({
   lastLogin: {
     type: Date,
     default: Date.now,
+  },
+  // Approval workflow
+  isApproved: {
+    type: Boolean,
+    default: false,
+  },
+  approvalStatus: {
+    type: String,
+    enum: ['pending', 'approved', 'rejected'],
+    default: 'pending',
   },
   // Password reset fields
   resetPasswordToken: String,

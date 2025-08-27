@@ -68,13 +68,13 @@ export default function DashboardPage() {
         color: 'from-green-500 to-green-600',
         bgColor: 'bg-green-100 dark:bg-green-900/30'
       },
-      {
-        title: 'Pending Assignments',
-        value: stats.pendingAssignments || 0,
-        icon: FileText,
-        color: 'from-orange-500 to-orange-600',
-        bgColor: 'bg-orange-100 dark:bg-orange-900/30'
-      },
+      // {
+      //   title: 'Pending Assignments',
+      //   value: stats.pendingAssignments || 0,
+      //   icon: FileText,
+      //   color: 'from-orange-500 to-orange-600',
+      //   bgColor: 'bg-orange-100 dark:bg-orange-900/30'
+      // },
       {
         title: 'Average Grade',
         value: `${stats.averageGrade || 0}%`,
@@ -169,7 +169,7 @@ export default function DashboardPage() {
     if (role === 'admin') {
       actions.push(
         { name: 'Add Student', icon: Plus, href: '/dashboard/students', color: 'bg-blue-500' },
-        { name: 'Manage Counselors', icon: Users, href: '/dashboard/counselors', color: 'bg-green-500' },
+        { name: 'Manage Faculty', icon: Users, href: '/dashboard/faculty', color: 'bg-green-500' },
         { name: 'View Reports', icon: BarChart3, href: '/dashboard/reports', color: 'bg-purple-500' },
         { name: 'System Settings', icon: Settings, href: '/dashboard/settings', color: 'bg-gray-500' }
       )

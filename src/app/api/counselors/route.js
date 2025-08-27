@@ -20,10 +20,24 @@ export async function GET(request) {
 
     const { searchParams } = new URL(request.url)
     const search = searchParams.get('search')
+    const roleParam = searchParams.get('role')
+    const department = searchParams.get('department')
 
-    let query = { role: 'counselor', isActive: true, isRegistered: true }
+    // Default to academic staff (faculty + hod + students optionally)
+    let query = {}
+    if (roleParam) {
+      query.role = roleParam
+    } else {
+      query.role = { $in: ['faculty', 'hod', 'student'] }
+    }
 
-    // Additional filters
+    if (department) query.department = department
+
+    // For non-admin users, show only active users
+    if (session.user.role !== 'admin') {
+      query.isActive = true
+    }
+
     if (search) {
       query.$or = [
         { email: { $regex: search, $options: 'i' } },
@@ -39,7 +53,7 @@ export async function GET(request) {
 
   } catch (error) {
     console.error('Counselors GET error:', error)
-    return NextResponse.json({ message: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ message: 'Internal server error', error: error.message }, { status: 500 })
   }
 }
 
@@ -71,10 +85,11 @@ export async function POST(request) {
       return NextResponse.json({ message: 'User already exists' }, { status: 400 })
     }
 
+    // Create as faculty (counselor role removed)
     const counselor = new User({
       email: email.toLowerCase(),
       password,
-      role: 'counselor',
+      role: 'faculty',
       department,
       admissionYear: new Date().getFullYear(), // Default to current year
       academicInfo: {
@@ -100,6 +115,6 @@ export async function POST(request) {
 
   } catch (error) {
     console.error('Counselors POST error:', error)
-    return NextResponse.json({ message: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ message: 'Internal server error', error: error.message }, { status: 500 })
   }
 }

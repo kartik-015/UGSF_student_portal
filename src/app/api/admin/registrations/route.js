@@ -15,7 +15,6 @@ export async function GET(request) {
 
     // Get all users except admin
     const registrations = await User.find({ role: { $ne: 'admin' } })
-      .populate('counselor', 'academicInfo.name email')
       .sort({ createdAt: -1 })
 
     return NextResponse.json({ 
@@ -26,7 +25,7 @@ export async function GET(request) {
   } catch (error) {
     console.error('Error fetching registrations:', error)
     return NextResponse.json(
-      { error: 'Internal server error' }, 
+      { error: 'Internal server error', message: error.message }, 
       { status: 500 }
     )
   }
@@ -57,7 +56,7 @@ export async function PATCH(request) {
       user.isApproved = true
       user.approvalStatus = 'approved'
       user.isActive = true
-      if (role && ['faculty', 'hod', 'counselor'].includes(role)) {
+      if (role && ['faculty', 'hod', 'student'].includes(role)) {
         user.role = role
       }
     } else {

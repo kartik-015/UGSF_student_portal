@@ -26,10 +26,17 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
   { name: 'Students', href: '/dashboard/students', icon: Users, roles: ['admin', 'hod'] },
   { name: 'Faculty', href: '/dashboard/faculty', icon: User, roles: ['admin','hod'] },
+<<<<<<< HEAD
   { name: 'Subjects', href: '/dashboard/subjects', icon: BookOpen, roles: ['faculty', 'hod'] },
   { name: 'Assignments', href: '/dashboard/assignments', icon: Calendar, roles: ['admin', 'faculty', 'student', 'hod'] },
   { name: 'Grades', href: '/dashboard/grades', icon: BarChart3, roles: ['faculty', 'student', 'hod'] },
   { name: 'Timetable', href: '/dashboard/timetable', icon: Calendar, roles: ['admin', 'faculty', 'student', 'hod'] },
+=======
+  { name: 'Subjects', href: '/dashboard/subjects', icon: BookOpen, roles: ['admin', 'faculty', 'hod'] },
+  // { name: 'Assignments', href: '/dashboard/assignments', icon: Calendar, roles: ['admin', 'faculty', 'student', 'hod'] },
+  // { name: 'Grades', href: '/dashboard/grades', icon: BarChart3, roles: ['admin', 'faculty', 'student', 'hod'] },
+  // { name: 'Timetable', href: '/dashboard/timetable', icon: Calendar, roles: ['admin', 'faculty', 'student', 'hod'] },
+>>>>>>> main
   { name: 'Projects', href: '/dashboard/projects', icon: Calendar, roles: ['student', 'hod', 'faculty', 'admin'] },
   { name: 'Settings', href: '/dashboard/settings', icon: Settings, roles: ['admin', 'faculty', 'student'] },
 ]

@@ -24,7 +24,6 @@ export default function AdminDashboard() {
   const { data: session, status } = useSession()
   const router = useRouter()
   const [registrations, setRegistrations] = useState([])
-  const [counselors, setCounselors] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedTab, setSelectedTab] = useState('registrations')
   const { scrollY } = useScroll()
@@ -48,51 +47,27 @@ export default function AdminDashboard() {
       if (response.ok) {
         const data = await response.json()
         setRegistrations(data.registrations || [])
+      } else {
+        const err = await response.json()
+        toast.error(err.error || 'Failed to fetch registrations')
+        setRegistrations([])
       }
     } catch (error) {
       console.error('Error fetching registrations:', error)
+      toast.error('Failed to fetch registrations')
+      setRegistrations([])
     }
   }, [])
 
-  const fetchCounselors = useCallback(async () => {
-    try {
-      const response = await fetch('/api/admin/counselors')
-      if (response.ok) {
-        const data = await response.json()
-        setCounselors(data.counselors || [])
-      }
-    } catch (error) {
-      console.error('Error fetching counselors:', error)
-    }
-  }, [])
+  
 
   useEffect(() => {
-    fetchRegistrations()
-    fetchCounselors()
-    setLoading(false)
-  }, [fetchRegistrations, fetchCounselors])
+  let mounted = true
+  fetchRegistrations().finally(() => { if (mounted) setLoading(false) })
+  return () => { mounted = false }
+  }, [fetchRegistrations])
 
-  const handleAssignCounselor = async (studentId, counselorId) => {
-    try {
-      const response = await fetch('/api/admin/assign-counselor', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ studentId, counselorId }),
-      })
-
-      if (response.ok) {
-        toast.success('Counselor assigned successfully!')
-        fetchRegistrations() // Refresh the list
-      } else {
-        const error = await response.json()
-        toast.error(error.message || 'Failed to assign counselor')
-      }
-    } catch (error) {
-      toast.error('An error occurred while assigning counselor')
-    }
-  }
+  // Assign feature removed (no counselor role)
 
   const handleApproveUser = async (userId, approve, roleOverride) => {
     try {
@@ -115,9 +90,9 @@ export default function AdminDashboard() {
 
   const getStats = () => {
     const totalStudents = registrations.filter(r => r.role === 'student').length
-    const totalCounselors = registrations.filter(r => r.role === 'counselor').length
+  const totalFaculty = registrations.filter(r => ['faculty','hod'].includes(r.role)).length
     const pendingOnboarding = registrations.filter(r => !r.isOnboarded).length
-    const assignedStudents = registrations.filter(r => r.role === 'student' && r.counselor).length
+  const assignedStudents = registrations.filter(r => r.role === 'student' && r.isApproved).length
 
     return [
       {
@@ -127,8 +102,8 @@ export default function AdminDashboard() {
         color: 'from-blue-600 to-purple-600'
       },
       {
-        name: 'Total Counselors',
-        value: totalCounselors,
+        name: 'Total Faculty',
+        value: totalFaculty,
         icon: Shield,
         color: 'from-green-600 to-blue-600'
       },
@@ -294,19 +269,7 @@ export default function AdminDashboard() {
               Registrations
             </motion.button>
             
-            <motion.button
-              onClick={() => setSelectedTab('assignments')}
-              className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 ${
-                selectedTab === 'assignments'
-                  ? 'bg-gradient-to-r from-green-600 to-blue-600 text-white shadow-lg'
-                  : 'bg-white/50 dark:bg-gray-700/50 text-gray-700 dark:text-gray-300 hover:bg-white/70 dark:hover:bg-gray-700/70 border border-white/20'
-              }`}
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-            >
-              <UserCheck className="w-4 h-4 inline mr-2" />
-              Assignments
-            </motion.button>
+            {/* Assignments tab removed (no counselor role) */}
           </div>
 
           {/* Content */}
@@ -404,15 +367,8 @@ export default function AdminDashboard() {
                             {user.isOnboarded ? 'Onboarded' : 'Pending'}
                           </span>
                           
-                          {user.role === 'student' && !user.counselor && (
-                            <motion.button
-                              onClick={() => setSelectedTab('assignments')}
-                              className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-purple-600 text-white text-sm font-medium shadow-lg hover:shadow-xl transition-all duration-300"
-                              whileHover={{ scale: 1.05 }}
-                              whileTap={{ scale: 0.95 }}
-                            >
-                              Assign Counselor
-                            </motion.button>
+                          {user.role === 'student' && (
+                            <span className="text-sm text-gray-500">Student</span>
                           )}
 
                           {['faculty','hod'].includes(user.role) && (
@@ -448,121 +404,7 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {selectedTab === 'assignments' && (
-            <div className="space-y-4">
-              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-                Counselor Assignments
-              </h3>
-              
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Unassigned Students */}
-                <motion.div
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.7 }}
-                  className="backdrop-blur-lg bg-white/60 dark:bg-gray-800/60 rounded-2xl p-6 border border-white/20"
-                >
-                  <h4 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <GraduationCap className="w-5 h-5" />
-                    Unassigned Students
-                  </h4>
-                  
-                  {registrations.filter(r => r.role === 'student' && !r.counselor).length === 0 ? (
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">
-                      All students have been assigned counselors
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {registrations
-                        .filter(r => r.role === 'student' && !r.counselor)
-                        .map((student, index) => (
-                          <motion.div
-                            key={student._id}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: 0.8 + index * 0.1 }}
-                            className="p-3 bg-white/50 dark:bg-gray-700/50 rounded-lg border border-white/20"
-                          >
-                            <div className="flex items-center justify-between">
-                              <div>
-                                <p className="font-medium text-gray-900 dark:text-white">
-                                  {student.academicInfo?.name || student.email}
-                                </p>
-                                <p className="text-sm text-gray-600 dark:text-gray-400">
-                                  {student.department} • {student.academicInfo?.semester}th Sem
-                                </p>
-                              </div>
-                              
-                              <select
-                                onChange={(e) => {
-                                  if (e.target.value) {
-                                    handleAssignCounselor(student._id, e.target.value)
-                                  }
-                                }}
-                                className="px-3 py-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white/50 dark:bg-gray-700/50 text-sm"
-                                defaultValue=""
-                              >
-                                <option value="">Select Counselor</option>
-                                {counselors.map(counselor => (
-                                  <option key={counselor._id} value={counselor._id}>
-                                    {counselor.academicInfo?.name || counselor.email}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          </motion.div>
-                        ))}
-                    </div>
-                  )}
-                </motion.div>
-
-                {/* Available Counselors */}
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.8 }}
-                  className="backdrop-blur-lg bg-white/60 dark:bg-gray-800/60 rounded-2xl p-6 border border-white/20"
-                >
-                  <h4 className="font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <Shield className="w-5 h-5" />
-                    Available Counselors
-                  </h4>
-                  
-                   {counselors.length === 0 ? (
-                    <p className="text-gray-500 dark:text-gray-400 text-sm">
-                      No counselors registered yet
-                    </p>
-                  ) : (
-                    <div className="space-y-3">
-                      {counselors.map((counselor, index) => (
-                        <motion.div
-                          key={counselor._id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: 0.9 + index * 0.1 }}
-                          className="p-3 bg-white/50 dark:bg-gray-700/50 rounded-lg border border-white/20"
-                        >
-                          <div>
-                            <p className="font-medium text-gray-900 dark:text-white">
-                              {counselor.academicInfo?.name || counselor.email}
-                            </p>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                              {counselor.specialization || 'General Counselor'}
-                            </p>
-                            {counselor.experience && (
-                              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                Experience: {counselor.experience}
-                              </p>
-                            )}
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  )}
-                </motion.div>
-              </div>
-            </div>
-          )}
+          {/* Assignments section removed: counselor role not used in this app */}
         </motion.div>
       </motion.div>
     </div>

@@ -9,19 +9,25 @@ import toast from 'react-hot-toast'
 export default function StudentsPage() {
   const { data: session } = useSession()
   const [students, setStudents] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedDepartment, setSelectedDepartment] = useState('')
   const [selectedSemester, setSelectedSemester] = useState('')
+  const [selectedUniversity, setSelectedUniversity] = useState('')
+  const [selectedInstitute, setSelectedInstitute] = useState('')
+  const [semesterParity, setSemesterParity] = useState('') // '', 'odd', 'even', 'current'
+  const [submitted, setSubmitted] = useState(false)
 
   const fetchStudents = useCallback(async () => {
     try {
       const params = new URLSearchParams()
-      if (searchTerm) params.append('search', searchTerm)
-      if (selectedDepartment) params.append('department', selectedDepartment)
-      if (selectedSemester) params.append('semester', selectedSemester)
-      
-      const response = await fetch(`/api/students?${params}`)
+  if (selectedDepartment) params.append('department', selectedDepartment)
+  if (selectedSemester) params.append('semester', selectedSemester)
+  if (semesterParity) params.append('semesterParity', semesterParity)
+  if (selectedUniversity) params.append('university', selectedUniversity)
+  if (selectedInstitute) params.append('institute', selectedInstitute)
+  if (searchTerm) params.append('search', searchTerm)
+  const response = await fetch(`/api/students?${params.toString()}`)
       if (response.ok) {
         const data = await response.json()
         setStudents(data.students || [])
@@ -33,14 +39,21 @@ export default function StudentsPage() {
     } finally {
       setLoading(false)
     }
-  }, [searchTerm, selectedDepartment, selectedSemester])
+  }, [searchTerm, selectedDepartment, selectedSemester, semesterParity, selectedUniversity, selectedInstitute])
 
-  useEffect(() => {
-    fetchStudents()
-  }, [fetchStudents])
+  // Do not auto-fetch on mount. Only fetch after user clicks Submit.
 
-  const departments = ['CSE', 'CE', 'IT', 'ME', 'EC', 'CH', 'DIT']
+  const instituteDepartments = {
+    'DEPSTAR': ['CSE','CE','IT'],
+    'CSPIT': ['CSE','CE','IT','EC','ME'],
+    'GCET': ['CSE','CE','IT','EC','ME','CH'],
+    'SCHOOL OF BUSINESS': ['MBA','BBA'],
+  }
+  const defaultDepartments = ['CSE', 'CE', 'IT', 'ME', 'EC', 'CH', 'DIT']
+  const departments = selectedInstitute && instituteDepartments[selectedInstitute.toUpperCase()] ? instituteDepartments[selectedInstitute.toUpperCase()] : defaultDepartments
   const semesters = [1, 2, 3, 4, 5, 6, 7, 8]
+  const universities = ['CHARUSAT']
+  const institutes = ['DEPSTAR', 'CSPIT', 'GCET', 'SCHOOL OF BUSINESS']
 
   if (loading) {
     return (
@@ -107,7 +120,25 @@ export default function StudentsPage() {
                 ))}
               </select>
             </div>
-            
+            <div className="min-w-[150px]">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                University
+              </label>
+              <select value={selectedUniversity} onChange={e => setSelectedUniversity(e.target.value)} className="input">
+                <option value="">All Universities</option>
+                {universities.map(u => <option key={u} value={u}>{u}</option>)}
+              </select>
+            </div>
+
+            <div className="min-w-[150px]">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Institute
+              </label>
+              <select value={selectedInstitute} onChange={e => setSelectedInstitute(e.target.value)} className="input">
+                <option value="">All Institutes</option>
+                {institutes.map(i => <option key={i} value={i}>{i}</option>)}
+              </select>
+            </div>
             <div className="min-w-[150px]">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Semester
@@ -125,12 +156,94 @@ export default function StudentsPage() {
                 ))}
               </select>
             </div>
+            
+            <div className="min-w-[150px]">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Semester Type
+              </label>
+              <select value={semesterParity} onChange={e => setSemesterParity(e.target.value)} className="input">
+                <option value="">Any</option>
+                <option value="current">Current (auto)</option>
+                <option value="odd">Odd Semesters</option>
+                <option value="even">Even Semesters</option>
+              </select>
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-2">
+            <button
+              className="px-4 py-2 rounded bg-blue-600 text-white"
+              onClick={async (e) => {
+                e.preventDefault()
+                setLoading(true)
+                // compute current parity if requested
+                let parity = semesterParity
+                if (parity === 'current') {
+                  const m = new Date().getMonth() + 1
+                  parity = (m >= 1 && m <= 6) ? 'even' : 'odd'
+                }
+                setSemesterParity(parity || '')
+                await fetchStudents()
+                setSubmitted(true)
+                setLoading(false)
+              }}
+            >
+              Submit
+            </button>
+            <button
+              className="px-3 py-2 rounded border"
+              onClick={() => {
+                setSelectedDepartment('')
+                setSelectedSemester('')
+                setSelectedInstitute('')
+                setSelectedUniversity('')
+                setSearchTerm('')
+                setSemesterParity('')
+                setStudents([])
+                setSubmitted(false)
+              }}
+            >
+              Reset
+            </button>
+            <button
+              className="ml-3 px-4 py-2 rounded bg-green-600 text-white"
+              onClick={async () => {
+                try {
+                  if (!students || students.length === 0) { toast('No students to export'); return }
+                  const ids = students.map(s => s._id)
+                  const res = await fetch('/api/students/export', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids })
+                  })
+                  if (!res.ok) { const j = await res.json().catch(()=>({})); toast.error(j.message || 'Export failed'); return }
+                  const blob = await res.blob()
+                  const urlObj = window.URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = urlObj
+                  a.download = 'students_export.xlsx'
+                  document.body.appendChild(a)
+                  a.click()
+                  a.remove()
+                  window.URL.revokeObjectURL(urlObj)
+                } catch (err) { console.error(err); toast.error('Export failed') }
+              }}
+            >
+              Download
+            </button>
+            <div className="ml-auto text-sm text-gray-600">
+              {submitted ? `${students.length} result(s)` : 'No results yet'}
+            </div>
           </div>
         </div>
 
         {/* Students List */}
-        <div className="grid gap-6">
-          {students.length === 0 ? (
+        {!submitted ? (
+          <div className="text-center py-16">
+            <p className="text-gray-500">Use the filters above and click Submit to view students.</p>
+          </div>
+        ) : (
+          <div className="grid gap-6">
+            {students.length === 0 ? (
             <div className="text-center py-12">
               <Users className="mx-auto h-12 w-12 text-gray-400" />
               <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-white">
@@ -211,6 +324,7 @@ export default function StudentsPage() {
             </div>
           )}
         </div>
+      )}
       </motion.div>
     </div>
   )
