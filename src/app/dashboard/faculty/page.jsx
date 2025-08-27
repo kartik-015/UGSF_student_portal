@@ -96,13 +96,14 @@ export default function FacultyDirectoryPage(){
           <button type='button' onClick={() => { setDept(''); setSearch(''); setRole(''); setResults([]); setSubmitted(false); setSelectedInstitute('') }} className='px-3 py-2 rounded border'>Reset</button>
           <button type='button' onClick={async () => {
             try {
-              const params = new URLSearchParams()
-              if (dept) params.append('department', dept)
-              if (search) params.append('search', search)
-              if (selectedInstitute) params.append('institute', selectedInstitute)
-              const url = `/api/students/export?${params.toString()}`
-              const res = await fetch(url)
-              if (!res.ok) { toast.error('Export failed'); return }
+              if (!results || results.length === 0) { toast('No results to export'); return }
+              const ids = results.map(r => r._id)
+              const res = await fetch('/api/students/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids })
+              })
+              if (!res.ok) { const j = await res.json().catch(()=>({})); toast.error(j.message || 'Export failed'); return }
               const blob = await res.blob()
               const urlObj = window.URL.createObjectURL(blob)
               const a = document.createElement('a')

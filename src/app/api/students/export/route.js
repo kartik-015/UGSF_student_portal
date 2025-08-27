@@ -101,3 +101,64 @@ export async function GET(request) {
     return NextResponse.json({ message: 'Internal server error' }, { status: 500 })
   }
 }
+
+// Accept POST with explicit ids array to export exactly those records
+export async function POST(request) {
+  try {
+    const session = await getServerSession(authOptions)
+    if (!session) return NextResponse.json({ message: 'Unauthorized' }, { status: 401 })
+    if (!['admin','hod','faculty'].includes(session.user.role)) return NextResponse.json({ message: 'Access denied' }, { status: 403 })
+
+    await dbConnect()
+
+    const body = await request.json()
+    const ids = Array.isArray(body.ids) ? body.ids : []
+
+    let students = []
+    if (ids.length > 0) {
+      students = await User.find({ _id: { $in: ids } }).select('-password').sort({ 'academicInfo.name': 1 })
+    } else {
+      return NextResponse.json({ message: 'No ids provided' }, { status: 400 })
+    }
+
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet('Students')
+    ws.columns = [
+      { header: 'Name', key: 'name', width: 30 },
+      { header: 'Email', key: 'email', width: 30 },
+      { header: 'Department', key: 'department', width: 15 },
+      { header: 'Semester', key: 'semester', width: 10 },
+      { header: 'Admission Year', key: 'admissionYear', width: 12 },
+      { header: 'Roll Number', key: 'roll', width: 15 },
+      { header: 'Phone', key: 'phone', width: 15 },
+      { header: 'Institute', key: 'institute', width: 20 },
+      { header: 'University', key: 'university', width: 20 }
+    ]
+
+    students.forEach(s => {
+      ws.addRow({
+        name: s.academicInfo?.name || '',
+        email: s.email,
+        department: s.department || '',
+        semester: s.academicInfo?.semester || '',
+        admissionYear: s.admissionYear || '',
+        roll: s.academicInfo?.rollNumber || '',
+        phone: s.academicInfo?.phoneNumber || '',
+        institute: s.institute || '',
+        university: s.university || ''
+      })
+    })
+
+    const buffer = await wb.xlsx.writeBuffer()
+    return new NextResponse(Buffer.from(buffer), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="students_export.xlsx"`
+      }
+    })
+  } catch (error) {
+    console.error('Students export POST error:', error)
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 })
+  }
+}

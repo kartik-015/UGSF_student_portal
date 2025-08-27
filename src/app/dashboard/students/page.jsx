@@ -208,21 +208,14 @@ export default function StudentsPage() {
               className="ml-3 px-4 py-2 rounded bg-green-600 text-white"
               onClick={async () => {
                 try {
-                  const params = new URLSearchParams()
-                  if (selectedDepartment) params.append('department', selectedDepartment)
-                  if (selectedSemester) params.append('semester', selectedSemester)
-                  let parity = semesterParity
-                  if (parity === 'current') {
-                    const m = new Date().getMonth() + 1
-                    parity = (m >= 1 && m <= 6) ? 'even' : 'odd'
-                  }
-                  if (parity) params.append('semesterParity', parity)
-                  if (selectedUniversity) params.append('university', selectedUniversity)
-                  if (selectedInstitute) params.append('institute', selectedInstitute)
-                  if (searchTerm) params.append('search', searchTerm)
-                  const url = `/api/students/export?${params.toString()}`
-                  const res = await fetch(url)
-                  if (!res.ok) { toast.error('Export failed'); return }
+                  if (!students || students.length === 0) { toast('No students to export'); return }
+                  const ids = students.map(s => s._id)
+                  const res = await fetch('/api/students/export', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ids })
+                  })
+                  if (!res.ok) { const j = await res.json().catch(()=>({})); toast.error(j.message || 'Export failed'); return }
                   const blob = await res.blob()
                   const urlObj = window.URL.createObjectURL(blob)
                   const a = document.createElement('a')
